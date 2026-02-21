@@ -12,6 +12,7 @@ import { HeartRateMonitor } from "./HeartRateMonitor";
 
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
+    const [isRoomLocked, setIsRoomLocked] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -28,11 +29,20 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             setLoading(false);
         });
 
+        // Listen for Room Lockdown State
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, onValue }) => {
+                onValue(ref(database, `rooms/${roomId}/isLocked`), (snap) => {
+                    setIsRoomLocked(snap.val() || false);
+                });
+            });
+        });
+
         return () => unsubscribe();
     }, [roomId, playerId]);
 
     const handleUpdate = (path: string, value: any) => {
-        if (!character) return;
+        if (!character || isRoomLocked) return;
 
         if (path.startsWith("baseStats/") || path.startsWith("baseSaves/")) {
             const updates: any = { [path]: value };
@@ -67,6 +77,12 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 </div>
             )}
 
+            {isRoomLocked && !isDead && (
+                <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-red-950/80 border border-red-900 text-red-500 px-3 py-1 text-xs font-bold tracking-widest animate-pulse">
+                    <Lock size={14} /> FICHAS TRAVADAS PELO DIRETOR
+                </div>
+            )}
+
             <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>
                 <div className="flex flex-col md:flex-row gap-6 items-start">
                     {/* AVATAR BOX (3x4 aspect ratio aprox) */}
@@ -97,8 +113,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
                         </h1>
                         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} />
-                            <InputGroup label="PRONOMES" value={character.pronouns} onChange={(v) => handleUpdate("pronouns", v)} />
+                            <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} disabled={isRoomLocked || isDead} />
+                            <InputGroup label="PRONOMES" value={character.pronouns} onChange={(v) => handleUpdate("pronouns", v)} disabled={isRoomLocked || isDead} />
                         </div>
                     </div>
                 </div>
@@ -111,18 +127,18 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <div>
                     <h2 className="text-xl border-b border-emerald-900/50 pb-2 mb-4">ATRIBUTOS</h2>
                     <div className="grid grid-cols-2 gap-4">
-                        <StatBox label="FORÇA" value={character.stats.strength} baseValue={character.baseStats.strength} path="baseStats/strength" onUpdate={handleUpdate} />
-                        <StatBox label="RAPIDEZ" value={character.stats.speed} baseValue={character.baseStats.speed} path="baseStats/speed" onUpdate={handleUpdate} />
-                        <StatBox label="INTELECTO" value={character.stats.intellect} baseValue={character.baseStats.intellect} path="baseStats/intellect" onUpdate={handleUpdate} />
-                        <StatBox label="COMBATE" value={character.stats.combat} baseValue={character.baseStats.combat} path="baseStats/combat" onUpdate={handleUpdate} />
+                        <StatBox label="FORÇA" value={character.stats.strength} baseValue={character.baseStats.strength} path="baseStats/strength" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        <StatBox label="RAPIDEZ" value={character.stats.speed} baseValue={character.baseStats.speed} path="baseStats/speed" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        <StatBox label="INTELECTO" value={character.stats.intellect} baseValue={character.baseStats.intellect} path="baseStats/intellect" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        <StatBox label="COMBATE" value={character.stats.combat} baseValue={character.baseStats.combat} path="baseStats/combat" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                     </div>
                 </div>
                 <div>
                     <h2 className="text-xl border-b border-emerald-900/50 pb-2 mb-4">RESISTÊNCIAS</h2>
                     <div className="grid grid-cols-1 gap-4">
-                        <StatBox label="SANIDADE" value={character.saves.sanity} baseValue={character.baseSaves.sanity} path="baseSaves/sanity" onUpdate={handleUpdate} />
-                        <StatBox label="MEDO" value={character.saves.fear} baseValue={character.baseSaves.fear} path="baseSaves/fear" onUpdate={handleUpdate} />
-                        <StatBox label="CORPO" value={character.saves.body} baseValue={character.baseSaves.body} path="baseSaves/body" onUpdate={handleUpdate} />
+                        <StatBox label="SANIDADE" value={character.saves.sanity} baseValue={character.baseSaves.sanity} path="baseSaves/sanity" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        <StatBox label="MEDO" value={character.saves.fear} baseValue={character.baseSaves.fear} path="baseSaves/fear" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        <StatBox label="CORPO" value={character.saves.body} baseValue={character.baseSaves.body} path="baseSaves/body" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                     </div>
                 </div>
             </section>
@@ -143,6 +159,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         path="vitals/health"
                         onUpdate={handleUpdate}
                         type="health"
+                        disabled={isRoomLocked || isDead}
                     />
                     <VitalBox
                         label="FERIDAS"
@@ -151,20 +168,23 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         path="vitals/wounds"
                         onUpdate={handleUpdate}
                         type="wounds"
+                        disabled={isRoomLocked || isDead}
                     />
                     <div className="bg-zinc-900/50 border border-emerald-900/50 p-4">
                         <div className="text-sm text-emerald-600 mb-2">STRESS</div>
                         <div className="flex gap-2 items-center">
                             <input
+                                disabled={isRoomLocked || isDead}
                                 type="number"
-                                className="w-16 bg-transparent border-b border-emerald-800 text-xl text-amber-500 outline-none text-center"
+                                className="w-16 bg-transparent border-b border-emerald-800 text-xl text-amber-500 outline-none text-center disabled:opacity-50"
                                 value={character.vitals.stress.current || 0}
                                 onChange={(e) => handleUpdate("vitals/stress/current", Number(e.target.value))}
                             />
                             <span className="text-emerald-800">/ Mão:</span>
                             <input
+                                disabled={isRoomLocked || isDead}
                                 type="number"
-                                className="w-16 bg-transparent border-b border-emerald-800 text-xl outline-none text-center"
+                                className="w-16 bg-transparent border-b border-emerald-800 text-xl outline-none text-center disabled:opacity-50"
                                 value={character.vitals.stress.min || 0}
                                 onChange={(e) => handleUpdate("vitals/stress/min", Number(e.target.value))}
                             />
@@ -185,7 +205,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 }
 
 // Helpers
-function InputGroup({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function InputGroup({ label, value, onChange, disabled }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
     const [local, setLocal] = useState(value);
     const timeoutRef = useRef<any>(null);
 
@@ -203,24 +223,28 @@ function InputGroup({ label, value, onChange }: { label: string; value: string; 
         <div className="flex flex-col">
             <label className="text-xs text-emerald-700 mb-1">{label}</label>
             <input
+                disabled={disabled}
                 type="text"
                 value={local}
                 onChange={handleChange}
-                className="bg-transparent border-b border-emerald-800 text-emerald-300 outline-none focus:border-emerald-400 focus:bg-emerald-950/20 px-1 py-1 uppercase"
+                className="bg-transparent border-b border-emerald-800 text-emerald-300 outline-none focus:border-emerald-400 focus:bg-emerald-950/20 px-1 py-1 uppercase disabled:opacity-50"
             />
         </div>
     );
 }
 
-function StatBox({ label, value, baseValue, path, onUpdate }: { label: string; value: number; baseValue: number; path: string; onUpdate: (p: string, v: number) => void }) {
+function StatBox({ label, value, baseValue, path, onUpdate, disabled }: { label: string; value: number; baseValue: number; path: string; onUpdate: (p: string, v: number) => void; disabled?: boolean }) {
     const isModified = value !== baseValue;
-    const [isLocked, setIsLocked] = useState(true);
+    const [isComponentLocked, setIsComponentLocked] = useState(true);
+
+    const isLocked = isComponentLocked || disabled;
 
     return (
-        <div className="bg-zinc-900/50 border border-emerald-900/50 p-2 flex flex-col group hover:border-emerald-500 transition-colors">
+        <div className="bg-zinc-900/50 border border-emerald-900/50 p-2 flex flex-col group hover:border-emerald-500 transition-colors relative">
+            {disabled && <div className="absolute inset-0 z-10 cursor-not-allowed"></div>}
             <div className="flex justify-between items-center mb-1">
                 <span className="text-sm text-emerald-600 group-hover:text-emerald-400">{label}</span>
-                <button onClick={() => setIsLocked(!isLocked)} className="text-emerald-800 hover:text-amber-500 transition-colors">
+                <button onClick={() => setIsComponentLocked(!isComponentLocked)} className={`text-emerald-800 transition-colors ${disabled ? 'opacity-50' : 'hover:text-amber-500'}`} disabled={disabled}>
                     {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
                 </button>
             </div>
@@ -232,7 +256,7 @@ function StatBox({ label, value, baseValue, path, onUpdate }: { label: string; v
                         value={baseValue || 0}
                         onChange={(e) => onUpdate(path, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-14 bg-zinc-950 border border-emerald-900 text-center text-sm outline-none font-mono focus:border-emerald-500 ${isLocked ? 'text-emerald-800/50 cursor-not-allowed' : 'text-amber-400'}`}
+                        className={`w-14 bg-zinc-950 border border-emerald-900 text-center text-sm outline-none font-mono focus:border-emerald-500 ${isLocked ? 'text-emerald-800/50 cursor-not-allowed' : 'text-amber-400'} disabled:bg-zinc-900/10`}
                         title="Atributo Base (S/ Classe)"
                     />
                 </div>
@@ -247,7 +271,7 @@ function StatBox({ label, value, baseValue, path, onUpdate }: { label: string; v
     );
 }
 
-function VitalBox({ label, current, max, path, onUpdate, type }: { label: string; current: number; max: number; path: string; onUpdate: (p: string, v: number) => void; type?: 'health' | 'wounds' }) {
+function VitalBox({ label, current, max, path, onUpdate, type, disabled }: { label: string; current: number; max: number; path: string; onUpdate: (p: string, v: number) => void; type?: 'health' | 'wounds'; disabled?: boolean }) {
     // Pulse logic for health
     let pulseClass = "";
     if (type === 'health') {
@@ -265,19 +289,22 @@ function VitalBox({ label, current, max, path, onUpdate, type }: { label: string
     }
 
     return (
-        <div className={`border p-4 transition-colors ${pulseClass ? pulseClass : 'bg-zinc-900/50 border-emerald-900/50'}`}>
+        <div className={`border p-4 transition-colors relative ${pulseClass ? pulseClass : 'bg-zinc-900/50 border-emerald-900/50'}`}>
+            {disabled && <div className="absolute inset-0 z-10 cursor-not-allowed"></div>}
             <div className={`text-sm mb-2 ${pulseClass && type === 'health' ? (current <= 3 ? 'text-red-500 font-bold' : 'text-amber-500 font-bold') : isDead ? 'text-red-500 font-bold' : 'text-emerald-600'}`}>{label} {isDead && "(CRÍTICO)"}</div>
             <div className="flex gap-2 items-center">
                 <input
+                    disabled={disabled}
                     type="number"
-                    className={`w-16 bg-transparent border-b text-xl outline-none text-center ${pulseClass && type === 'health' ? (current <= 3 ? 'border-red-800 text-red-400' : 'border-amber-800 text-amber-400') : isDead ? 'border-red-800 text-red-400 font-bold' : 'border-emerald-800 text-emerald-400'}`}
+                    className={`w-16 bg-transparent border-b text-xl outline-none text-center disabled:opacity-50 ${pulseClass && type === 'health' ? (current <= 3 ? 'border-red-800 text-red-400' : 'border-amber-800 text-amber-400') : isDead ? 'border-red-800 text-red-400 font-bold' : 'border-emerald-800 text-emerald-400'}`}
                     value={current || 0}
                     onChange={(e) => onUpdate(`${path}/current`, Number(e.target.value))}
                 />
                 <span className={pulseClass ? (current <= 3 || isDead ? 'text-red-800' : 'text-amber-800') : "text-emerald-800"}>/</span>
                 <input
+                    disabled={disabled}
                     type="number"
-                    className={`w-16 bg-transparent border-b text-xl outline-none text-center ${pulseClass ? (current <= 3 || isDead ? 'border-red-800 text-red-700' : 'border-amber-800 text-amber-700') : 'border-emerald-800 text-emerald-700'}`}
+                    className={`w-16 bg-transparent border-b text-xl outline-none text-center disabled:opacity-50 ${pulseClass ? (current <= 3 || isDead ? 'border-red-800 text-red-700' : 'border-amber-800 text-amber-700') : 'border-emerald-800 text-emerald-700'}`}
                     value={max || 0}
                     onChange={(e) => onUpdate(`${path}/max`, Number(e.target.value))}
                 />

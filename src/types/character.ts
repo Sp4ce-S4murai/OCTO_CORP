@@ -54,6 +54,7 @@ export interface CharacterSheet {
 
 // Room represents the collection of players in a specific Warden session
 export interface RoomData {
+    isLocked?: boolean;
     players: Record<string, CharacterSheet>;
     logs: Record<string, RollLog>;
 }
@@ -67,5 +68,5 @@ export interface RollLog {
     statValue: number;
     modifier?: { name: string; value: number }; // +10, +15, +20
     roll: number;
-    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress';
+    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Message';
 }

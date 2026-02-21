@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog } from "@/lib/database";
+import { database } from "@/lib/firebase";
+import { ref, set } from "firebase/database";
 import { RoomData, CharacterSheet, RollLog } from "@/types/character";
-import { User, Activity } from "lucide-react";
+import { User, Activity, Lock, Unlock } from "lucide-react";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 
 export default function WardenClient({ roomId }: { roomId: string }) {
     const [roomData, setRoomData] = useState<RoomData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [wardenMessage, setWardenMessage] = useState("");
 
     useEffect(() => {
         const unsubscribe = subscribeToRoom(roomId, (data) => {
@@ -77,6 +80,39 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         });
     };
 
+    const handleSendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!wardenMessage.trim()) return;
+
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: "DIRETOR",
+            playerId: "SYSTEM",
+            statName: wardenMessage.trim(),
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+
+        setWardenMessage(""); // Clear input
+    };
+
+    const toggleLockdown = () => {
+        if (!roomData) return;
+        const newLockState = !roomData.isLocked;
+        set(ref(database, `rooms/${roomId}/isLocked`), newLockState).catch(console.error);
+
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: `PROTOCOLO DE SEGURANÇA: ${newLockState ? 'ATIVADO (FICHAS TRAVADAS)' : 'DESATIVADO (EDIÇÃO LIVRE)'}`,
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
+
     if (loading) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Sincronizando feed de vídeo...</div>;
     }
@@ -85,11 +121,20 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
     return (
         <main className="max-w-7xl mx-auto flex flex-col gap-8">
-            <header className="border-b-2 border-emerald-900 pb-4">
-                <h1 className="text-3xl font-bold uppercase tracking-widest text-emerald-400">
-                    PAINEL DO DIRETOR // SETOR {roomId}
-                </h1>
-                <p className="text-emerald-700 mt-2">Nível de Acesso: Máximo (Sobrescrita Remota Autorizada)</p>
+            <header className="border-b-2 border-emerald-900 pb-4 flex justify-between items-end">
+                <div>
+                    <h1 className="text-3xl font-bold uppercase tracking-widest text-emerald-400">
+                        PAINEL DO DIRETOR // SETOR {roomId}
+                    </h1>
+                    <p className="text-emerald-700 mt-2">Nível de Acesso: Máximo (Sobrescrita Remota Autorizada)</p>
+                </div>
+                <button
+                    onClick={toggleLockdown}
+                    className={`flex items-center gap-2 px-4 py-2 border font-bold uppercase tracking-widest transition-colors ${roomData?.isLocked ? 'bg-red-950/80 border-red-900 text-red-500 hover:bg-red-900' : 'bg-emerald-950/30 border-emerald-900 text-emerald-600 hover:bg-emerald-900 hover:text-emerald-300'}`}
+                    title={roomData?.isLocked ? "Destravar edição dos jogadores" : "Travar Fichas (Lockdown)"}
+                >
+                    {roomData?.isLocked ? <><Lock size={18} /> TRAVAMENTO MÁXIMO ATIVADO</> : <><Unlock size={18} /> FICHAS LIVRES (DESTRAVADAS)</>}
+                </button>
             </header>
 
             <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -110,9 +155,27 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     ))}
                 </div>
 
-                <div className="xl:col-span-1 border-l-2 border-emerald-900/50 pl-0 xl:pl-8">
+                <div className="xl:col-span-1 border-l-2 border-emerald-900/50 pl-0 xl:pl-8 flex flex-col">
                     <h2 className="text-xl text-emerald-500 mb-4 tracking-widest">FEED DE EVENTOS</h2>
-                    <TerminalLog roomId={roomId} />
+                    <TerminalLog roomId={roomId} heightClass="h-[600px]" />
+
+                    {/* Warden Broadcast Input */}
+                    <form onSubmit={handleSendMessage} className="mt-4 flex gap-2">
+                        <input
+                            type="text"
+                            value={wardenMessage}
+                            onChange={(e) => setWardenMessage(e.target.value)}
+                            placeholder="Transmitir mensagem via commlink..."
+                            className="flex-1 bg-zinc-950 border border-emerald-900/50 p-2 text-emerald-400 outline-none focus:border-emerald-500 font-mono text-sm placeholder:text-emerald-900"
+                        />
+                        <button
+                            type="submit"
+                            disabled={!wardenMessage.trim()}
+                            className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-400 px-4 font-bold border border-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase text-sm"
+                        >
+                            ENVIAR
+                        </button>
+                    </form>
                 </div>
             </section>
         </main>

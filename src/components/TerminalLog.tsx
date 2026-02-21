@@ -5,7 +5,7 @@ import { database } from "@/lib/firebase";
 import { ref, onValue, query, orderByChild, limitToLast } from "firebase/database";
 import { RollLog } from "@/types/character";
 
-export function TerminalLog({ roomId }: { roomId: string }) {
+export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, heightClass?: string }) {
     const [logs, setLogs] = useState<RollLog[]>([]);
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -40,13 +40,14 @@ export function TerminalLog({ roomId }: { roomId: string }) {
             case 'Panic Success': return 'text-sky-400 font-bold bg-sky-900/30 px-1';
             case 'Warden Damage': return 'text-red-500 font-bold bg-red-950/80 px-2';
             case 'Warden Stress': return 'text-amber-500 font-bold bg-amber-950/80 px-2';
+            case 'Warden Message': return 'text-cyan-400 font-bold';
             default: return 'text-zinc-500';
         }
     };
 
     return (
-        <div className="bg-zinc-950 border border-emerald-900 p-4 h-64 flex flex-col font-mono text-sm shadow-inner shadow-black/50 overflow-hidden">
-            <div className="text-emerald-700 text-xs mb-2 border-b border-emerald-900/50 pb-1 flex justify-between">
+        <div className={`bg-zinc-950 border border-emerald-900 p-4 ${heightClass} flex flex-col font-mono text-xs shadow-inner shadow-black/50 overflow-hidden`}>
+            <div className="text-emerald-700 text-[10px] mb-2 border-b border-emerald-900/50 pb-1 flex justify-between uppercase tracking-widest">
                 <span>COMMLINK_UPLINK::SECTOR_{roomId}</span>
                 <span className="animate-pulse">REC</span>
             </div>
@@ -54,12 +55,23 @@ export function TerminalLog({ roomId }: { roomId: string }) {
                 {logs.length === 0 && <div className="text-emerald-900">Aguardando telemetria...</div>}
                 {logs.map(log => {
                     const isPanic = log.result.includes('Panic');
-                    const isWarden = log.result.includes('Warden');
+                    const isWarden = log.result.includes('Warden Damage') || log.result.includes('Warden Stress');
+                    const isWardenMsg = log.result === 'Warden Message';
                     const hasMod = !!log.modifier;
 
+                    if (isWardenMsg) {
+                        return (
+                            <div key={log.id} className="border-l-2 pl-2 py-1 border-cyan-900/50 bg-cyan-950/10 mb-1">
+                                <span className="text-cyan-600/70 text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                                <span className="text-cyan-500 font-bold">TRANSMISSÃO DIRETA:</span>{' '}
+                                <span className="text-cyan-300 italic">"{log.statName}"</span>
+                            </div>
+                        );
+                    }
+
                     return (
-                        <div key={log.id} className={`border-l-2 pl-2 py-1 ${isPanic ? 'border-amber-600/50 bg-amber-950/10' : isWarden ? 'border-red-900/80' : 'border-emerald-900/30'}`}>
-                            <span className="text-emerald-600/70 text-xs">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                        <div key={log.id} className={`border-l-2 pl-2 py-1 mb-1 ${isPanic ? 'border-amber-600/50 bg-amber-950/10' : isWarden ? 'border-red-900/80' : 'border-emerald-900/30'}`}>
+                            <span className="text-emerald-600/70 text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
 
                             {isWarden ? (
                                 <>
