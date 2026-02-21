@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { subscribeToRoom, updatePlayerNested, updatePlayer } from "@/lib/database";
 import { RoomData, CharacterSheet } from "@/types/character";
+import { User, Activity } from "lucide-react";
 import { TerminalLog } from "./TerminalLog";
+import { HeartRateMonitor } from "./HeartRateMonitor";
 
 export default function WardenClient({ roomId }: { roomId: string }) {
     const [roomData, setRoomData] = useState<RoomData | null>(null);
@@ -101,77 +103,95 @@ function MiniSheet({ character, onUpdate, onDamage }: { character: CharacterShee
                     onChange={(e) => onUpdate("name", e.target.value)}
                     className={`bg-transparent font-bold uppercase outline-none w-full ${isDead ? 'text-red-500' : 'text-emerald-300 focus:bg-emerald-950/50'}`}
                 />
-                <span className={`text-xs px-2 py-1 uppercase ml-2 ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>
+                <span className={`text-xs px-2 py-1 uppercase ml-2 whitespace-nowrap ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                {/* Vitals Summary */}
-                <div className="flex flex-col gap-2">
-                    {/* SAÚDE COMPONENT WITH DAMAGE BOX */}
-                    <div className="flex justify-between items-center bg-zinc-900/50 p-1 px-2 border border-emerald-900">
-                        <span className={`text-xs ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>SAÚDE</span>
-                        <div className="flex items-center text-sm gap-2">
-                            <span className={isDead ? 'text-red-500' : 'text-emerald-300'}>{character.vitals.health.current} <span className="text-emerald-800">/</span> {character.vitals.health.max}</span>
+            <div className="flex gap-4">
+                {/* 3x4 Avatar Miniature */}
+                <div className={`w-20 h-28 shrink-0 border ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950'} flex items-center justify-center p-0.5 overflow-hidden`}>
+                    {character.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${isDead ? 'grayscale opacity-50' : ''}`} />
+                    ) : (
+                        <User size={32} className={`opacity-20 ${isDead ? 'text-red-500' : 'text-emerald-500'}`} />
+                    )}
+                </div>
 
-                            {!isDead && (
-                                <div className="flex ml-2 border border-emerald-800 bg-zinc-950">
-                                    <input
-                                        type="number"
-                                        id={`dmg-${character.id}`}
-                                        className="w-8 bg-transparent text-center text-red-400 outline-none text-xs"
-                                        placeholder="0"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                const val = Number(e.currentTarget.value);
+                <div className="flex-1 flex flex-col justify-between">
+                    {/* EKG Miniature */}
+                    <div className="h-4 w-full mb-2 opacity-80">
+                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} isDead={isDead} />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2">
+                        {/* SAÚDE */}
+                        <div className="flex justify-between items-center bg-zinc-900/50 p-1 border border-emerald-900">
+                            <span className={`text-[10px] pl-1 ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>SAÚDE</span>
+                            <div className="flex items-center text-xs gap-1">
+                                <span className={isDead ? 'text-red-500' : 'text-emerald-300'}>{character.vitals.health.current} <span className="text-emerald-800">/</span> {character.vitals.health.max}</span>
+
+                                {!isDead && (
+                                    <div className="flex ml-1 border border-emerald-800 bg-zinc-950">
+                                        <input
+                                            type="number"
+                                            id={`dmg-${character.id}`}
+                                            className="w-6 bg-transparent text-center text-red-400 outline-none text-[10px]"
+                                            placeholder="0"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = Number(e.currentTarget.value);
+                                                    if (val > 0) onDamage(val);
+                                                    e.currentTarget.value = "";
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const el = document.getElementById(`dmg-${character.id}`) as HTMLInputElement;
+                                                const val = Number(el.value);
                                                 if (val > 0) onDamage(val);
-                                                e.currentTarget.value = "";
-                                            }
-                                        }}
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            const el = document.getElementById(`dmg-${character.id}`) as HTMLInputElement;
-                                            const val = Number(el.value);
-                                            if (val > 0) onDamage(val);
-                                            el.value = "";
-                                        }}
-                                        className="bg-red-950/80 hover:bg-red-900 text-red-300 text-[10px] px-1 font-bold border-l border-emerald-800 transition-colors"
-                                        title="Aplicar Dano Direto"
-                                    >
-                                        DANO
-                                    </button>
-                                </div>
-                            )}
+                                                el.value = "";
+                                            }}
+                                            className="bg-red-950/80 hover:bg-red-900 text-red-300 text-[9px] px-1 font-bold border-l border-emerald-800 transition-colors"
+                                        >
+                                            DMG
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                    {/* FERIDAS */}
-                    <div className={`flex justify-between items-center bg-zinc-900/50 p-1 px-2 border ${isDead ? 'border-red-900' : 'border-emerald-900'}`}>
-                        <span className={`text-xs ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>FERIDAS</span>
-                        <div className="flex items-center text-sm">
-                            <input disabled={isDead} type="number" className={`w-8 bg-transparent text-right outline-none focus:bg-emerald-900/50 ${isDead ? 'text-red-500 font-bold' : 'text-emerald-300'}`} value={character.vitals.wounds.current || 0} onChange={(e) => onUpdate("vitals/wounds/current", Number(e.target.value))} />
-                            <span className={isDead ? 'text-red-800 mx-1' : 'text-emerald-800 mx-1'}>/</span>
-                            <span className={isDead ? 'text-red-700 font-bold' : 'text-emerald-700'}>{character.vitals.wounds.max}</span>
+                        {/* FERIDAS */}
+                        <div className={`flex justify-between items-center bg-zinc-900/50 p-1 border ${isDead ? 'border-red-900' : 'border-emerald-900'}`}>
+                            <span className={`text-[10px] pl-1 ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>FERIDAS</span>
+                            <div className="flex items-center text-xs pr-1">
+                                <input disabled={isDead} type="number" className={`w-6 bg-transparent text-right outline-none focus:bg-emerald-900/50 ${isDead ? 'text-red-500 font-bold' : 'text-emerald-300'}`} value={character.vitals.wounds.current || 0} onChange={(e) => onUpdate("vitals/wounds/current", Number(e.target.value))} />
+                                <span className={isDead ? 'text-red-800 mx-1' : 'text-emerald-800 mx-1'}>/</span>
+                                <span className={isDead ? 'text-red-700 font-bold' : 'text-emerald-700'}>{character.vitals.wounds.max}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex justify-between items-center bg-amber-950/20 p-1 px-2 border border-amber-900/50">
-                        <span className="text-xs text-amber-600">STRESS</span>
-                        <div className="flex items-center text-sm">
-                            <input type="number" className="w-8 bg-transparent text-right outline-none text-amber-400 focus:bg-amber-900/50 font-bold" value={character.vitals.stress.current || 0} onChange={(e) => onUpdate("vitals/stress/current", Number(e.target.value))} />
-                            <span className="text-amber-800/50 mx-1">/</span>
-                            <span className="text-amber-700/50">{character.vitals.stress.min}</span>
+                        <div className="flex justify-between items-center bg-amber-950/20 p-1 border border-amber-900/50">
+                            <span className="text-[10px] pl-1 text-amber-600">STRESS</span>
+                            <div className="flex items-center text-xs pr-1">
+                                <input type="number" className="w-6 bg-transparent text-right outline-none text-amber-400 focus:bg-amber-900/50 font-bold" value={character.vitals.stress.current || 0} onChange={(e) => onUpdate("vitals/stress/current", Number(e.target.value))} />
+                                <span className="text-amber-800/50 mx-1">/</span>
+                                <span className="text-amber-700/50">{character.vitals.stress.min}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Stats Summary - Fast View */}
-                <div className="grid grid-cols-2 gap-1 text-xs">
-                    <StatMini label="FOR" value={character.stats.strength} />
-                    <StatMini label="RAP" value={character.stats.speed} />
-                    <StatMini label="INT" value={character.stats.intellect} />
-                    <StatMini label="CMB" value={character.stats.combat} />
-                    <StatMini label="SAN" value={character.saves.sanity} isSave />
-                    <StatMini label="MED" value={character.saves.fear} isSave />
-                    <StatMini label="COR" value={character.saves.body} isSave />
+            {/* Stats Summary - Fast View */}
+            <div className="grid grid-cols-4 gap-1 text-[10px]">
+                <StatMini label="FOR" value={character.stats.strength} />
+                <StatMini label="RAP" value={character.stats.speed} />
+                <StatMini label="INT" value={character.stats.intellect} />
+                <StatMini label="CMB" value={character.stats.combat} />
+                <StatMini label="SAN" value={character.saves.sanity} isSave />
+                <StatMini label="MED" value={character.saves.fear} isSave />
+                <StatMini label="COR" value={character.saves.body} isSave />
+                <div className="flex justify-center items-center border border-emerald-900/50 bg-emerald-950/10 opacity-50">
+                    <Activity size={10} className="text-emerald-500" />
                 </div>
             </div>
         </div>

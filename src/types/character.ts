@@ -37,6 +37,7 @@ export interface CharacterSheet {
     name: string;
     pronouns: string;
     characterClass: CharacterClass;
+    avatarUrl?: string; // Opt-in image URL
 
     // We split stats to allow base (rolled) vs class mods
     baseStats: Stats;

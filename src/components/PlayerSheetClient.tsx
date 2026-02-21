@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer } from "@/lib/database";
 import { CharacterSheet } from "@/types/character";
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock, User } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
 import { SkillTreeSelector } from "./SkillTreeSelector";
+import { HeartRateMonitor } from "./HeartRateMonitor";
 
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
@@ -67,12 +68,39 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             )}
 
             <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>
-                <h1 className={`text-2xl font-bold uppercase tracking-widest ${isDead ? 'text-red-500' : 'text-emerald-400'}`}>
-                    Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
-                </h1>
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} />
-                    <InputGroup label="PRONOMES" value={character.pronouns} onChange={(v) => handleUpdate("pronouns", v)} />
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                    {/* AVATAR BOX (3x4 aspect ratio aprox) */}
+                    <div className="w-32 h-40 shrink-0 border border-emerald-900 bg-zinc-950 flex flex-col items-center justify-center relative group overflow-hidden">
+                        {character.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${isDead ? 'grayscale opacity-50' : ''}`} />
+                        ) : (
+                            <User size={48} className={`opacity-20 ${isDead ? 'text-red-500' : 'text-emerald-500'}`} />
+                        )}
+
+                        {/* Hover Overlay for URL input */}
+                        <div className="absolute inset-0 bg-zinc-950/90 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col p-2 justify-center">
+                            <label className="text-[10px] text-emerald-500 mb-1 text-center">URL DA FOTO</label>
+                            <input
+                                type="text"
+                                className="w-full bg-zinc-900 border border-emerald-800 text-xs text-emerald-300 p-1 outline-none focus:border-emerald-500 text-center"
+                                placeholder="http://..."
+                                value={character.avatarUrl || ""}
+                                onChange={(e) => handleUpdate("avatarUrl", e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    {/* IDENTITY INFO */}
+                    <div className="flex-1 w-full">
+                        <h1 className={`text-2xl font-bold uppercase tracking-widest ${isDead ? 'text-red-500' : 'text-emerald-400'}`}>
+                            Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
+                        </h1>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} />
+                            <InputGroup label="PRONOMES" value={character.pronouns} onChange={(v) => handleUpdate("pronouns", v)} />
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -101,7 +129,12 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
             {/* VITALS */}
             <section className="mb-8 relative z-20">
-                <h2 className="text-xl border-b border-emerald-900/50 pb-2 mb-4">VITAIS</h2>
+                <div className="flex justify-between items-end border-b border-emerald-900/50 pb-2 mb-4">
+                    <h2 className="text-xl">VITAIS</h2>
+                    <div className="w-48 lg:w-64">
+                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} isDead={isDead} />
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <VitalBox
                         label="SAÚDE"

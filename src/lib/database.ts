@@ -68,6 +68,7 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
         name,
         pronouns: '',
         characterClass: 'Teamster',
+        avatarUrl: '',
 
         baseStats,
         classMods: {},
@@ -78,7 +79,7 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
         saves: { ...baseSaves },
 
         vitals: {
-            health: { current: 2, max: 2 },
+            health: { current: 10, max: 10 },
             wounds: { current: 0, max: 2 },
             stress: { current: 2, min: 2 }
         },
