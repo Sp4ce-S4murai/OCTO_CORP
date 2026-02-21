@@ -52,9 +52,20 @@ export interface CharacterSheet {
     skills: Skills;
 }
 
+export interface EnvironmentState {
+    presetName: string;
+    temperature: string; // e.g. "21°C", "-270°C"
+    pressure: string; // e.g. "1 ATM", "Escaldante"
+    oxygen: string; // e.g. "100%", "Tóxico"
+    luminosity: string; // e.g. "Estável", "Breu Total"
+    gravity: string; // e.g. "Padrão (1G)", "Microgravidade"
+    radiation: string; // e.g. "Seguro", "Letal"
+}
+
 // Room represents the collection of players in a specific Warden session
 export interface RoomData {
     isLocked?: boolean;
+    environment?: EnvironmentState;
     players: Record<string, CharacterSheet>;
     logs: Record<string, RollLog>;
 }

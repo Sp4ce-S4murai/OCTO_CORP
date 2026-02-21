@@ -30,6 +30,11 @@ export const subscribeToPlayer = (
 };
 
 // Actions
+export const updateEnvironment = async (roomId: string, envData: any) => {
+    const ePath = ref(database, `${roomPath(roomId)}/environment`);
+    await set(ePath, envData);
+};
+
 export const updatePlayer = async (roomId: string, playerId: string, partialData: Partial<CharacterSheet>) => {
     const pPath = ref(database, playerPath(roomId, playerId));
     await update(pPath, partialData);

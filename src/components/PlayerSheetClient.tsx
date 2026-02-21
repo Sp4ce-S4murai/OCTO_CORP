@@ -9,11 +9,14 @@ import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
 import { SkillTreeSelector } from "./SkillTreeSelector";
 import { HeartRateMonitor } from "./HeartRateMonitor";
+import { EnvironmentPanel } from "./EnvironmentPanel";
+import { EnvironmentState } from "@/types/character";
 
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
     const [isRoomLocked, setIsRoomLocked] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [environment, setEnvironment] = useState<EnvironmentState | undefined>(undefined);
 
     useEffect(() => {
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
@@ -29,11 +32,15 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             setLoading(false);
         });
 
-        // Listen for Room Lockdown State
+        // Listen for Room Lockdown State & Environment Telemetry
         import("@/lib/firebase").then(({ database }) => {
             import("firebase/database").then(({ ref, onValue }) => {
                 onValue(ref(database, `rooms/${roomId}/isLocked`), (snap) => {
                     setIsRoomLocked(snap.val() || false);
+                });
+
+                onValue(ref(database, `rooms/${roomId}/environment`), (snap) => {
+                    setEnvironment(snap.val());
                 });
             });
         });
@@ -81,6 +88,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-red-950/80 border border-red-900 text-red-500 px-3 py-1 text-xs font-bold tracking-widest animate-pulse">
                     <Lock size={14} /> FICHAS TRAVADAS PELO DIRETOR
                 </div>
+            )}
+
+            {!isDead && (
+                <EnvironmentPanel environment={environment} vitals={character.vitals} isDead={isDead} />
             )}
 
             <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>

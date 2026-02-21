@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment } from "@/lib/database";
 import { database } from "@/lib/firebase";
 import { ref, set } from "firebase/database";
 import { RoomData, CharacterSheet, RollLog } from "@/types/character";
@@ -14,6 +14,30 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const [loading, setLoading] = useState(true);
     const [wardenMessage, setWardenMessage] = useState("");
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+
+    const ENVIRONMENT_PRESETS = {
+        'Clima Estabilizado': { presetName: 'Clima Estabilizado', temperature: '21', pressure: '1.0', oxygen: '100', luminosity: 'Estável', gravity: '1.0', radiation: '0.1' },
+        'Superfície de Magma (Vulcania-9)': { presetName: 'Superfície de Magma', temperature: '480', pressure: '3.5', oxygen: '4', luminosity: 'Ofuscante Vermelho', gravity: '1.2', radiation: '120' },
+        'Vácuo Espacial (Exterior)': { presetName: 'Vácuo', temperature: '-270', pressure: '0.0', oxygen: '0', luminosity: 'Escuridão', gravity: '0.0', radiation: '80' },
+        'Planeta Glacial (Hoth-Z)': { presetName: 'Planeta Glacial', temperature: '-80', pressure: '1.2', oxygen: '25', luminosity: 'Ofuscante Branco', gravity: '1.5', radiation: '2' },
+        'Pântano Ácido (Tóxico)': { presetName: 'Pântano Ácido', temperature: '45', pressure: '2.0', oxygen: '12', luminosity: 'Neblina Verde', gravity: '1.0', radiation: '60' },
+        'Estação Abandonada (Falha Energética)': { presetName: 'Estação Abandonada', temperature: '5', pressure: '0.8', oxygen: '15', luminosity: 'Piscando', gravity: '0.1', radiation: '10' },
+        'Gigante Gasoso (Queda Livre)': { presetName: 'Atmosfera Densa', temperature: '-120', pressure: '45.0', oxygen: '0', luminosity: 'Tempestade Magnética', gravity: '3.5', radiation: '500' },
+        'Zona de Quarentena (Nível 5)': { presetName: 'Quarentena Biológica', temperature: '38', pressure: '1.5', oxygen: 'Corrosivo', luminosity: 'Luz Negra', gravity: '1.0', radiation: '5' }
+    };
+
+    const applyEnvironmentPreset = (presetName: keyof typeof ENVIRONMENT_PRESETS) => {
+        updateEnvironment(roomId, ENVIRONMENT_PRESETS[presetName]);
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: `TELEMETRIA AMBIENTAL: ${presetName}`,
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
 
     useEffect(() => {
         const unsubscribe = subscribeToRoom(roomId, (data) => {
@@ -156,7 +180,27 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             </header>
 
             <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
+
+                    {/* ENVIRONMENT PRESET SELECTOR */}
+                    <div className="md:col-span-2 border border-emerald-900/50 bg-emerald-950/10 p-4 mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h2 className="text-sm font-bold tracking-widest text-emerald-500 uppercase">CONTROLE DE TELEMETRIA AMBIENTAL</h2>
+                            <span className="text-xs text-emerald-700">Painel do Jogador Atual: {roomData?.environment?.presetName || 'Desconhecido'}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {(Object.keys(ENVIRONMENT_PRESETS) as Array<keyof typeof ENVIRONMENT_PRESETS>).map(preset => (
+                                <button
+                                    key={preset}
+                                    onClick={() => applyEnvironmentPreset(preset)}
+                                    className={`text-xs px-3 py-1 font-bold tracking-wide uppercase border transition-colors ${roomData?.environment?.presetName === preset ? 'bg-emerald-900 text-emerald-400 border-emerald-500' : 'bg-transparent text-emerald-600 border-emerald-900/50 hover:bg-emerald-950/50 hover:text-emerald-300'}`}
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {players.length === 0 && (
                         <div className="text-emerald-800 p-8 border border-emerald-900/50 bg-emerald-950/10">
                             Nenhuma assinatura vital detectada neste setor.
