@@ -5,7 +5,7 @@ import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog } from "@/li
 import { database } from "@/lib/firebase";
 import { ref, set } from "firebase/database";
 import { RoomData, CharacterSheet, RollLog } from "@/types/character";
-import { User, Activity, Lock, Unlock } from "lucide-react";
+import { User, Activity, Lock, Unlock, Eye, X } from "lucide-react";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 
@@ -13,6 +13,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const [roomData, setRoomData] = useState<RoomData | null>(null);
     const [loading, setLoading] = useState(true);
     const [wardenMessage, setWardenMessage] = useState("");
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
     useEffect(() => {
         const unsubscribe = subscribeToRoom(roomId, (data) => {
@@ -24,7 +25,24 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     }, [roomId]);
 
     const handleUpdate = (playerId: string, path: string, value: any) => {
-        updatePlayerNested(roomId, playerId, path, value);
+        const character = roomData?.players?.[playerId];
+        if (!character) return;
+
+        if (path.startsWith("baseStats/") || path.startsWith("baseSaves/")) {
+            const updates: any = { [path]: value };
+
+            if (path.startsWith("baseStats/")) {
+                const stat = path.split("/")[1] as keyof typeof character.stats;
+                updates[`stats/${stat}`] = Number(value) + (character.classMods?.[stat] || 0);
+            } else if (path.startsWith("baseSaves/")) {
+                const save = path.split("/")[1] as keyof typeof character.saves;
+                updates[`saves/${save}`] = Number(value) + (character.classSaveMods?.[save] || 0);
+            }
+
+            updatePlayer(roomId, playerId, updates);
+        } else {
+            updatePlayerNested(roomId, playerId, path, value);
+        }
     };
 
     const handleDamage = (playerId: string, damage: number) => {
@@ -151,6 +169,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             onUpdate={(path, val) => handleUpdate(player.id, path, val)}
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
+                            onInspect={() => setSelectedPlayerId(player.id)}
                         />
                     ))}
                 </div>
@@ -178,15 +197,24 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     </form>
                 </div>
             </section>
+
+            {/* Modal de Inspeção Dinâmica */}
+            {selectedPlayerId && roomData?.players?.[selectedPlayerId] && (
+                <PlayerModal
+                    character={roomData.players[selectedPlayerId]}
+                    onClose={() => setSelectedPlayerId(null)}
+                    onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val)}
+                />
+            )}
         </main>
     );
 }
 
-function MiniSheet({ character, onUpdate, onDamage, onStress }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void, onStress: (val: number) => void }) {
+function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void, onStress: (val: number) => void, onInspect: () => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     return (
-        <div className={`border p-4 shadow-lg flex flex-col gap-4 group ${isDead ? 'bg-red-950/20 border-red-900' : 'bg-zinc-950/80 border-emerald-800'}`}>
+        <div className={`border p-4 shadow-lg flex flex-col gap-4 group relative ${isDead ? 'bg-red-950/20 border-red-900' : 'bg-zinc-950/80 border-emerald-800'}`}>
             <div className={`flex justify-between items-center border-b pb-2 ${isDead ? 'border-red-900/50' : 'border-emerald-900/50'}`}>
                 <input
                     type="text"
@@ -194,7 +222,12 @@ function MiniSheet({ character, onUpdate, onDamage, onStress }: { character: Cha
                     onChange={(e) => onUpdate("name", e.target.value)}
                     className={`bg-transparent font-bold uppercase outline-none w-full ${isDead ? 'text-red-500' : 'text-emerald-300 focus:bg-emerald-950/50'}`}
                 />
-                <span className={`text-xs px-2 py-1 uppercase ml-2 whitespace-nowrap ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>
+                <div className="flex items-center">
+                    <span className={`text-[10px] px-2 py-1 uppercase ml-2 whitespace-nowrap ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>
+                    <button onClick={onInspect} className="text-[10px] px-2 py-1 uppercase ml-2 whitespace-nowrap bg-teal-950/80 text-teal-400 hover:bg-teal-900 border border-teal-900/50 transition-colors flex items-center gap-1 font-bold">
+                        <Eye size={12} /> VER
+                    </button>
+                </div>
             </div>
 
             <div className="flex gap-4">
@@ -301,6 +334,118 @@ function StatMini({ label, value, isSave }: { label: string, value: number, isSa
         <div className={`flex justify-between items-center p-1 border ${isSave ? 'border-emerald-800/30' : 'border-emerald-900/50 bg-emerald-950/10'}`}>
             <span className={isSave ? 'text-emerald-700' : 'text-emerald-600'}>{label}</span>
             <span className={isSave ? 'text-emerald-500' : 'text-emerald-400'}>{value}</span>
+        </div>
+    );
+}
+
+//
+// MÓDULO DE INSPEÇÃO (MODAL DO DIRETOR)
+//
+function PlayerModal({ character, onClose, onUpdate }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: any) => void }) {
+    const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className={`w-full max-w-4xl border-2 ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950'} p-6 relative max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col gap-6`} onClick={(e) => e.stopPropagation()}>
+                <button onClick={onClose} className="absolute top-4 right-4 text-emerald-600 hover:text-emerald-300">
+                    <X size={24} />
+                </button>
+
+                <h2 className={`text-2xl font-bold tracking-widest border-b pb-4 ${isDead ? 'text-red-500 border-red-900/50' : 'text-emerald-400 border-emerald-900/50'}`}>
+                    INSPEÇÃO DE PROTOCOLO // {character.name || "UNIDADE"}
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Atributos */}
+                    <div>
+                        <h3 className="text-xl border-b border-emerald-900/50 pb-2 mb-4 text-emerald-500">ATRIBUTOS</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            <WardenStatBox label="FORÇA" value={character.stats.strength} path="baseStats/strength" onUpdate={onUpdate} baseValue={character.baseStats.strength} />
+                            <WardenStatBox label="RAPIDEZ" value={character.stats.speed} path="baseStats/speed" onUpdate={onUpdate} baseValue={character.baseStats.speed} />
+                            <WardenStatBox label="INTELECTO" value={character.stats.intellect} path="baseStats/intellect" onUpdate={onUpdate} baseValue={character.baseStats.intellect} />
+                            <WardenStatBox label="COMBATE" value={character.stats.combat} path="baseStats/combat" onUpdate={onUpdate} baseValue={character.baseStats.combat} />
+                        </div>
+                    </div>
+                    {/* Resistencias */}
+                    <div>
+                        <h3 className="text-xl border-b border-emerald-900/50 pb-2 mb-4 text-emerald-500">RESISTÊNCIAS</h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            <WardenStatBox label="SANIDADE" value={character.saves.sanity} path="baseSaves/sanity" onUpdate={onUpdate} baseValue={character.baseSaves.sanity} />
+                            <WardenStatBox label="MEDO" value={character.saves.fear} path="baseSaves/fear" onUpdate={onUpdate} baseValue={character.baseSaves.fear} />
+                            <WardenStatBox label="CORPO" value={character.saves.body} path="baseSaves/body" onUpdate={onUpdate} baseValue={character.baseSaves.body} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <WardenVitalBox label="SAÚDE" current={character.vitals.health.current} max={character.vitals.health.max} path="vitals/health" onUpdate={onUpdate} />
+                    <WardenVitalBox label="FERIDAS" current={character.vitals.wounds.current} max={character.vitals.wounds.max} path="vitals/wounds" onUpdate={onUpdate} />
+                    <div className="border border-emerald-900/50 bg-zinc-900/50 p-4 shrink-0">
+                        <div className="text-emerald-600 mb-2 font-bold text-sm tracking-widest">STRESS (ATUAL/MÍNIMO)</div>
+                        <div className="flex gap-2 items-center">
+                            <input
+                                type="number"
+                                className="w-16 bg-transparent border-b border-amber-800 text-xl text-amber-500 outline-none text-center font-bold focus:border-amber-400 focus:bg-amber-950/20"
+                                value={character.vitals.stress.current || 0}
+                                onChange={(e) => onUpdate("vitals/stress/current", Number(e.target.value))}
+                            />
+                            <span className="text-emerald-800 font-bold">/</span>
+                            <input
+                                type="number"
+                                className="w-16 bg-transparent border-b border-emerald-800 text-xl text-emerald-500 outline-none text-center focus:border-emerald-500 focus:bg-emerald-950/20"
+                                value={character.vitals.stress.min || 0}
+                                onChange={(e) => onUpdate("vitals/stress/min", Number(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function WardenStatBox({ label, value, baseValue, path, onUpdate }: { label: string, value: number, baseValue: number, path: string, onUpdate: (p: string, v: number) => void }) {
+    return (
+        <div className="border border-emerald-900/50 bg-zinc-900/50 p-2 flex flex-col hover:border-emerald-500 transition-colors">
+            <span className="text-sm text-emerald-600 font-bold">{label}</span>
+            <div className="flex justify-between items-center w-full mt-2">
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-emerald-700/50 uppercase leading-none mb-1">Base</span>
+                    <input
+                        type="number"
+                        className="w-14 bg-zinc-950 border border-emerald-900 text-center text-sm outline-none font-mono focus:border-emerald-500 text-amber-500 py-1"
+                        value={baseValue || 0}
+                        onChange={(e) => onUpdate(path, Number(e.target.value))}
+                    />
+                </div>
+                <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-emerald-700/50 uppercase leading-none mb-1">Total (+Mod)</span>
+                    <span className="text-2xl font-bold text-emerald-400">{value || 0}</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function WardenVitalBox({ label, current, max, path, onUpdate }: { label: string, current: number, max: number, path: string, onUpdate: (p: string, v: number) => void }) {
+    return (
+        <div className="border border-emerald-900/50 bg-zinc-900/50 p-4">
+            <div className="text-emerald-600 mb-2 font-bold text-sm tracking-widest">{label}</div>
+            <div className="flex gap-2 items-center">
+                <input
+                    type="number"
+                    className="w-16 bg-transparent border-b border-emerald-800 text-xl text-emerald-400 outline-none text-center font-bold focus:border-emerald-400 focus:bg-emerald-950/20"
+                    value={current || 0}
+                    onChange={(e) => onUpdate(`${path}/current`, Number(e.target.value))}
+                />
+                <span className="text-emerald-800 font-bold">/</span>
+                <input
+                    type="number"
+                    className="w-16 bg-transparent border-b border-emerald-800 text-xl text-emerald-600 outline-none text-center focus:border-emerald-600 focus:bg-emerald-950/20"
+                    value={max || 0}
+                    onChange={(e) => onUpdate(`${path}/max`, Number(e.target.value))}
+                />
+            </div>
         </div>
     );
 }
