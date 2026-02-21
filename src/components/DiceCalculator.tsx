@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { pushLog, updatePlayerNested } from "@/lib/database";
 import { CharacterSheet, RollLog } from "@/types/character";
 
@@ -39,10 +39,22 @@ export function DiceCalculator({ roomId, character }: Props) {
     const [selectedStatPath, setSelectedStatPath] = useState("stats.strength");
     const [selectedSkillName, setSelectedSkillName] = useState("Nenhuma (+0)");
 
-    // States for Panic
     const [panicMode, setPanicMode] = useState(false);
     const [panicRollStr, setPanicRollStr] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
+
+    const classAutoSkills = useMemo(() => {
+        switch (character.characterClass) {
+            case 'Soldier': return ["Treino Militar", "Atletismo"];
+            case 'Android': return ["Linguística", "Computação", "Matemática"];
+            case 'Teamster': return ["Maquinário", "Gravidade Zero"];
+            default: return [];
+        }
+    }, [character.characterClass]);
+
+    const isSkillActive = (skillName: string, tier: 'trained' | 'expert' | 'master') => {
+        return classAutoSkills.includes(skillName) || !!character.skills?.[tier]?.[skillName]?.isActive;
+    };
 
     const handleRoll = async (isVirtualRoll: boolean = false) => {
         if (isProcessing) return;
@@ -258,24 +270,24 @@ export function DiceCalculator({ roomId, character }: Props) {
                         >
                             <option value="Nenhuma (+0)">Nenhuma (+0)</option>
                             <optgroup label="Básicas (+10)">
-                                {Object.values(character.skills?.trained || {})
-                                    .filter(s => s && s.isActive)
-                                    .map(skill => (
-                                        <option key={skill.name} value={skill.name}>{skill.name}</option>
+                                {SKILL_TREE["Básicas (+10)"]
+                                    .filter(skillName => isSkillActive(skillName, 'trained'))
+                                    .map(skillName => (
+                                        <option key={skillName} value={skillName}>{skillName}</option>
                                     ))}
                             </optgroup>
                             <optgroup label="Expertises (+15)">
-                                {Object.values(character.skills?.expert || {})
-                                    .filter(s => s && s.isActive)
-                                    .map(skill => (
-                                        <option key={skill.name} value={skill.name}>{skill.name}</option>
+                                {SKILL_TREE["Expertises (+15)"]
+                                    .filter(skillName => isSkillActive(skillName, 'expert'))
+                                    .map(skillName => (
+                                        <option key={skillName} value={skillName}>{skillName}</option>
                                     ))}
                             </optgroup>
                             <optgroup label="Maestrias (+20)">
-                                {Object.values(character.skills?.master || {})
-                                    .filter(s => s && s.isActive)
-                                    .map(skill => (
-                                        <option key={skill.name} value={skill.name}>{skill.name}</option>
+                                {SKILL_TREE["Maestrias (+20)"]
+                                    .filter(skillName => isSkillActive(skillName, 'master'))
+                                    .map(skillName => (
+                                        <option key={skillName} value={skillName}>{skillName}</option>
                                     ))}
                             </optgroup>
                         </select>

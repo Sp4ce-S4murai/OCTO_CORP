@@ -97,6 +97,10 @@ export function SkillTreeSelector({ roomId, character }: Props) {
         }
     }, [character.characterClass]);
 
+    const isSkillActive = (skillName: string) => {
+        return classAutoSkills.includes(skillName) || !!flatSkills[skillName]?.isActive;
+    };
+
     // Sync to database automatically when modifying
     const handleToggle = async (skillName: string, currentlyActive: boolean) => {
         const skill = flatSkills[skillName];
@@ -104,7 +108,7 @@ export function SkillTreeSelector({ roomId, character }: Props) {
 
         // Check prerequisites if turning ON
         if (!currentlyActive && skill.prerequisites.length > 0) {
-            const hasReq = skill.prerequisites.some(reqName => flatSkills[reqName]?.isActive);
+            const hasReq = skill.prerequisites.some(reqName => isSkillActive(reqName));
             if (!hasReq) {
                 alert("Falta de Pré-requisito: Você precisa possuir pelo menos 1 perícia base antes de aprender esta.");
                 return;
@@ -134,12 +138,11 @@ export function SkillTreeSelector({ roomId, character }: Props) {
                     {label}
                 </h4>
                 {list.map(skill => {
-                    const state = flatSkills[skill.name];
-                    const isActive = state?.isActive || false;
+                    const isActive = isSkillActive(skill.name);
                     const isCompulsory = classAutoSkills.includes(skill.name);
 
                     // Render Logic
-                    const hasMetReq = skill.prerequisites.length === 0 || skill.prerequisites.some(p => flatSkills[p]?.isActive);
+                    const hasMetReq = skill.prerequisites.length === 0 || skill.prerequisites.some(p => isSkillActive(p));
 
                     return (
                         <label
@@ -148,9 +151,9 @@ export function SkillTreeSelector({ roomId, character }: Props) {
                         >
                             <input
                                 type="checkbox"
-                                checked={isActive || isCompulsory}
+                                checked={isActive}
                                 disabled={isCompulsory || !hasMetReq}
-                                onChange={() => handleToggle(skill.name, isActive || isCompulsory)}
+                                onChange={() => handleToggle(skill.name, isActive)}
                                 className="accent-emerald-500 bg-zinc-950 border-emerald-900"
                             />
                             <span className={`text-sm ${isActive ? 'text-emerald-300 font-bold' : 'text-emerald-700'} ${isCompulsory ? 'underline decoration-amber-500' : ''}`}>
