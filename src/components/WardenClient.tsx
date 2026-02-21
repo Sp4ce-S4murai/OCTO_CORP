@@ -257,6 +257,13 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void, onStress: (val: number) => void, onInspect: () => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
+    const getAvatarFilterState = () => {
+        if (isDead) return 'avatar-filter-critical grayscale opacity-50';
+        if (character.vitals.health.current <= 3) return 'avatar-filter-critical';
+        if (character.vitals.health.current <= 6) return 'avatar-filter-warning';
+        return 'avatar-filter-normal';
+    };
+
     return (
         <div className={`border p-4 shadow-lg flex flex-col gap-4 group relative ${isDead ? 'bg-red-950/20 border-red-900' : 'bg-zinc-950/80 border-emerald-800'}`}>
             <div className={`flex justify-between items-center border-b pb-2 ${isDead ? 'border-red-900/50' : 'border-emerald-900/50'}`}>
@@ -276,10 +283,10 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect }: { cha
 
             <div className="flex gap-4">
                 {/* 3x4 Avatar Miniature */}
-                <div className={`w-20 h-28 shrink-0 border ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950'} flex items-center justify-center p-0.5 overflow-hidden`}>
+                <div className={`w-20 h-28 shrink-0 border ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950'} flex items-center justify-center p-0.5 overflow-hidden scanline-overlay`}>
                     {character.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${isDead ? 'grayscale opacity-50' : ''}`} />
+                        <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${getAvatarFilterState()}`} />
                     ) : (
                         <User size={32} className={`opacity-20 ${isDead ? 'text-red-500' : 'text-emerald-500'}`} />
                     )}

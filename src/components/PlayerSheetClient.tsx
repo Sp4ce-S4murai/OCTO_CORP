@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer } from "@/lib/database";
 import { CharacterSheet } from "@/types/character";
-import { Lock, Unlock, User } from "lucide-react";
+import { Lock, Unlock, User, Upload } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
@@ -68,11 +68,45 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         }
     };
 
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isRoomLocked || isDead) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const MAX_WIDTH = 300;
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+
+                const ctx = canvas.getContext("2d");
+                ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // Compress heavily into WebP to save Firebase Realtime DB Bandwidth
+                const dataUrl = canvas.toDataURL("image/webp", 0.7);
+                handleUpdate("avatarUrl", dataUrl);
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    };
+
     if (loading || !character) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Carregando Conexão Neural...</div>;
     }
 
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+
+    const getAvatarFilterState = () => {
+        if (isDead) return 'avatar-filter-critical grayscale opacity-50';
+        if (character.vitals.health.current <= 3) return 'avatar-filter-critical';
+        if (character.vitals.health.current <= 6) return 'avatar-filter-warning';
+        return 'avatar-filter-normal';
+    };
 
     return (
         <main className={`max-w-4xl mx-auto border-2 ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80'} p-6 rounded-sm shadow-2xl relative overflow-hidden`}>
@@ -97,25 +131,29 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>
                 <div className="flex flex-col md:flex-row gap-6 items-start">
                     {/* AVATAR BOX (3x4 aspect ratio aprox) */}
-                    <div className="w-32 h-40 shrink-0 border border-emerald-900 bg-zinc-950 flex flex-col items-center justify-center relative group overflow-hidden">
+                    <div className="w-32 h-40 shrink-0 border border-emerald-900 bg-zinc-950 flex flex-col items-center justify-center relative group overflow-hidden scanline-overlay">
                         {character.avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${isDead ? 'grayscale opacity-50' : ''}`} />
+                            <img src={character.avatarUrl} alt="Avatar" className={`w-full h-full object-cover ${getAvatarFilterState()}`} />
                         ) : (
                             <User size={48} className={`opacity-20 ${isDead ? 'text-red-500' : 'text-emerald-500'}`} />
                         )}
 
-                        {/* Hover Overlay for URL input */}
-                        <div className="absolute inset-0 bg-zinc-950/90 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col p-2 justify-center">
-                            <label className="text-[10px] text-emerald-500 mb-1 text-center">URL DA FOTO</label>
-                            <input
-                                type="text"
-                                className="w-full bg-zinc-900 border border-emerald-800 text-xs text-emerald-300 p-1 outline-none focus:border-emerald-500 text-center"
-                                placeholder="http://..."
-                                value={character.avatarUrl || ""}
-                                onChange={(e) => handleUpdate("avatarUrl", e.target.value)}
-                            />
-                        </div>
+                        {/* Hover Overlay for Upload */}
+                        {!isRoomLocked && !isDead && (
+                            <label className="absolute inset-0 bg-zinc-950/90 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer">
+                                <Upload size={24} className="text-emerald-500 mb-2" />
+                                <span className="text-[10px] text-emerald-500 text-center font-bold tracking-widest uppercase px-2 hover:text-emerald-300">
+                                    Substituir ID
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleImageUpload}
+                                />
+                            </label>
+                        )}
                     </div>
 
                     {/* IDENTITY INFO */}
