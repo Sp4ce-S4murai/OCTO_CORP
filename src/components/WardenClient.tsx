@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToRoom, updatePlayerNested } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer } from "@/lib/database";
 import { RoomData, CharacterSheet } from "@/types/character";
 import { TerminalLog } from "./TerminalLog";
 
@@ -20,6 +20,32 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
     const handleUpdate = (playerId: string, path: string, value: any) => {
         updatePlayerNested(roomId, playerId, path, value);
+    };
+
+    const handleDamage = (playerId: string, damage: number) => {
+        const char = roomData?.players?.[playerId];
+        if (!char || damage <= 0) return;
+
+        let newHealth = char.vitals.health.current - damage;
+        let newWounds = char.vitals.wounds.current;
+
+        // Overflow calculation
+        while (newHealth <= 0 && newWounds < char.vitals.wounds.max) {
+            newWounds += 1;
+            newHealth += char.vitals.health.max; // Rollover the remainder
+        }
+
+        // Clamp to death state
+        if (newWounds >= char.vitals.wounds.max) {
+            newWounds = char.vitals.wounds.max;
+            newHealth = 0;
+        }
+
+        // We use updatePlayerNested to send multiple fields at root level of the player
+        updatePlayer(roomId, playerId, {
+            "vitals/health/current": newHealth,
+            "vitals/wounds/current": newWounds,
+        } as any);
     };
 
     if (loading) {
@@ -45,7 +71,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         </div>
                     )}
                     {players.map(player => (
-                        <MiniSheet key={player.id} character={player} onUpdate={(path, val) => handleUpdate(player.id, path, val)} />
+                        <MiniSheet
+                            key={player.id}
+                            character={player}
+                            onUpdate={(path, val) => handleUpdate(player.id, path, val)}
+                            onDamage={(dmg) => handleDamage(player.id, dmg)}
+                        />
                     ))}
                 </div>
 
@@ -58,36 +89,68 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     );
 }
 
-function MiniSheet({ character, onUpdate }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void }) {
+function MiniSheet({ character, onUpdate, onDamage }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void }) {
+    const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+
     return (
-        <div className="bg-zinc-950/80 border border-emerald-800 p-4 shadow-lg flex flex-col gap-4 group">
-            <div className="flex justify-between items-center border-b border-emerald-900/50 pb-2">
+        <div className={`border p-4 shadow-lg flex flex-col gap-4 group ${isDead ? 'bg-red-950/20 border-red-900' : 'bg-zinc-950/80 border-emerald-800'}`}>
+            <div className={`flex justify-between items-center border-b pb-2 ${isDead ? 'border-red-900/50' : 'border-emerald-900/50'}`}>
                 <input
                     type="text"
                     value={character.name || "NOME INDISPONÍVEL"}
                     onChange={(e) => onUpdate("name", e.target.value)}
-                    className="bg-transparent text-emerald-300 font-bold uppercase outline-none focus:bg-emerald-950/50 w-full"
+                    className={`bg-transparent font-bold uppercase outline-none w-full ${isDead ? 'text-red-500' : 'text-emerald-300 focus:bg-emerald-950/50'}`}
                 />
-                <span className="text-xs text-emerald-700 bg-emerald-950/30 px-2 py-1 uppercase ml-2">{character.characterClass}</span>
+                <span className={`text-xs px-2 py-1 uppercase ml-2 ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 {/* Vitals Summary */}
                 <div className="flex flex-col gap-2">
+                    {/* SAÚDE COMPONENT WITH DAMAGE BOX */}
                     <div className="flex justify-between items-center bg-zinc-900/50 p-1 px-2 border border-emerald-900">
-                        <span className="text-xs text-emerald-600">SAÚDE</span>
-                        <div className="flex items-center text-sm">
-                            <input type="number" className="w-8 bg-transparent text-right outline-none text-emerald-300 focus:bg-emerald-900/50" value={character.vitals.health.current || 0} onChange={(e) => onUpdate("vitals/health/current", Number(e.target.value))} />
-                            <span className="text-emerald-800 mx-1">/</span>
-                            <span className="text-emerald-700">{character.vitals.health.max}</span>
+                        <span className={`text-xs ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>SAÚDE</span>
+                        <div className="flex items-center text-sm gap-2">
+                            <span className={isDead ? 'text-red-500' : 'text-emerald-300'}>{character.vitals.health.current} <span className="text-emerald-800">/</span> {character.vitals.health.max}</span>
+
+                            {!isDead && (
+                                <div className="flex ml-2 border border-emerald-800 bg-zinc-950">
+                                    <input
+                                        type="number"
+                                        id={`dmg-${character.id}`}
+                                        className="w-8 bg-transparent text-center text-red-400 outline-none text-xs"
+                                        placeholder="0"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const val = Number(e.currentTarget.value);
+                                                if (val > 0) onDamage(val);
+                                                e.currentTarget.value = "";
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const el = document.getElementById(`dmg-${character.id}`) as HTMLInputElement;
+                                            const val = Number(el.value);
+                                            if (val > 0) onDamage(val);
+                                            el.value = "";
+                                        }}
+                                        className="bg-red-950/80 hover:bg-red-900 text-red-300 text-[10px] px-1 font-bold border-l border-emerald-800 transition-colors"
+                                        title="Aplicar Dano Direto"
+                                    >
+                                        DANO
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
-                    <div className="flex justify-between items-center bg-zinc-900/50 p-1 px-2 border border-emerald-900">
-                        <span className="text-xs text-emerald-600">FERIDAS</span>
+                    {/* FERIDAS */}
+                    <div className={`flex justify-between items-center bg-zinc-900/50 p-1 px-2 border ${isDead ? 'border-red-900' : 'border-emerald-900'}`}>
+                        <span className={`text-xs ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>FERIDAS</span>
                         <div className="flex items-center text-sm">
-                            <input type="number" className="w-8 bg-transparent text-right outline-none text-emerald-300 focus:bg-emerald-900/50" value={character.vitals.wounds.current || 0} onChange={(e) => onUpdate("vitals/wounds/current", Number(e.target.value))} />
-                            <span className="text-emerald-800 mx-1">/</span>
-                            <span className="text-emerald-700">{character.vitals.wounds.max}</span>
+                            <input disabled={isDead} type="number" className={`w-8 bg-transparent text-right outline-none focus:bg-emerald-900/50 ${isDead ? 'text-red-500 font-bold' : 'text-emerald-300'}`} value={character.vitals.wounds.current || 0} onChange={(e) => onUpdate("vitals/wounds/current", Number(e.target.value))} />
+                            <span className={isDead ? 'text-red-800 mx-1' : 'text-emerald-800 mx-1'}>/</span>
+                            <span className={isDead ? 'text-red-700 font-bold' : 'text-emerald-700'}>{character.vitals.wounds.max}</span>
                         </div>
                     </div>
                     <div className="flex justify-between items-center bg-amber-950/20 p-1 px-2 border border-amber-900/50">

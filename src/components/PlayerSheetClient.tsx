@@ -54,11 +54,21 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Carregando Conexão Neural...</div>;
     }
 
+    const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+
     return (
-        <main className="max-w-4xl mx-auto border-2 border-emerald-900 bg-zinc-950/80 p-6 rounded-sm shadow-2xl shadow-emerald-900/20">
-            <header className="border-b-2 border-emerald-900 pb-4 mb-6">
-                <h1 className="text-2xl font-bold uppercase tracking-widest text-emerald-400">
-                    Terminal MOTHERSHIP // {roomId}
+        <main className={`max-w-4xl mx-auto border-2 ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80'} p-6 rounded-sm shadow-2xl relative overflow-hidden`}>
+            {isDead && (
+                <div className="absolute inset-0 bg-red-950/40 z-10 pointer-events-none flex items-center justify-center">
+                    <div className="text-red-500 font-bold text-6xl md:text-9xl opacity-20 rotate-[-15deg] uppercase tracking-widest border-y-8 border-red-500/20 py-4 mix-blend-overlay">
+                        O B I T O
+                    </div>
+                </div>
+            )}
+
+            <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>
+                <h1 className={`text-2xl font-bold uppercase tracking-widest ${isDead ? 'text-red-500' : 'text-emerald-400'}`}>
+                    Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
                 </h1>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} />
@@ -90,7 +100,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             </section>
 
             {/* VITALS */}
-            <section className="mb-8">
+            <section className="mb-8 relative z-20">
                 <h2 className="text-xl border-b border-emerald-900/50 pb-2 mb-4">VITAIS</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <VitalBox
@@ -99,6 +109,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         max={character.vitals.health.max}
                         path="vitals/health"
                         onUpdate={handleUpdate}
+                        type="health"
                     />
                     <VitalBox
                         label="FERIDAS"
@@ -106,6 +117,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         max={character.vitals.wounds.max}
                         path="vitals/wounds"
                         onUpdate={handleUpdate}
+                        type="wounds"
                     />
                     <div className="bg-zinc-900/50 border border-emerald-900/50 p-4">
                         <div className="text-sm text-emerald-600 mb-2">STRESS</div>
@@ -202,21 +214,37 @@ function StatBox({ label, value, baseValue, path, onUpdate }: { label: string; v
     );
 }
 
-function VitalBox({ label, current, max, path, onUpdate }: { label: string; current: number; max: number; path: string; onUpdate: (p: string, v: number) => void }) {
+function VitalBox({ label, current, max, path, onUpdate, type }: { label: string; current: number; max: number; path: string; onUpdate: (p: string, v: number) => void; type?: 'health' | 'wounds' }) {
+    // Pulse logic for health
+    let pulseClass = "";
+    if (type === 'health') {
+        if (current <= 3 && current > 0) {
+            pulseClass = "animate-pulse border-red-500 bg-red-950/20";
+        } else if (current <= 6 && current > 3) {
+            pulseClass = "animate-pulse border-amber-500 bg-amber-950/20";
+        }
+    }
+
+    // Death logic styling
+    const isDead = type === 'wounds' && current >= max;
+    if (isDead) {
+        pulseClass = "border-red-600 bg-red-950/40 text-red-500";
+    }
+
     return (
-        <div className="bg-zinc-900/50 border border-emerald-900/50 p-4">
-            <div className="text-sm text-emerald-600 mb-2">{label}</div>
+        <div className={`border p-4 transition-colors ${pulseClass ? pulseClass : 'bg-zinc-900/50 border-emerald-900/50'}`}>
+            <div className={`text-sm mb-2 ${pulseClass && type === 'health' ? (current <= 3 ? 'text-red-500 font-bold' : 'text-amber-500 font-bold') : isDead ? 'text-red-500 font-bold' : 'text-emerald-600'}`}>{label} {isDead && "(CRÍTICO)"}</div>
             <div className="flex gap-2 items-center">
                 <input
                     type="number"
-                    className="w-16 bg-transparent border-b border-emerald-800 text-xl outline-none text-center"
+                    className={`w-16 bg-transparent border-b text-xl outline-none text-center ${pulseClass && type === 'health' ? (current <= 3 ? 'border-red-800 text-red-400' : 'border-amber-800 text-amber-400') : isDead ? 'border-red-800 text-red-400 font-bold' : 'border-emerald-800 text-emerald-400'}`}
                     value={current || 0}
                     onChange={(e) => onUpdate(`${path}/current`, Number(e.target.value))}
                 />
-                <span className="text-emerald-800">/</span>
+                <span className={pulseClass ? (current <= 3 || isDead ? 'text-red-800' : 'text-amber-800') : "text-emerald-800"}>/</span>
                 <input
                     type="number"
-                    className="w-16 bg-transparent border-b border-emerald-800 text-xl outline-none text-center text-emerald-700"
+                    className={`w-16 bg-transparent border-b text-xl outline-none text-center ${pulseClass ? (current <= 3 || isDead ? 'border-red-800 text-red-700' : 'border-amber-800 text-amber-700') : 'border-emerald-800 text-emerald-700'}`}
                     value={max || 0}
                     onChange={(e) => onUpdate(`${path}/max`, Number(e.target.value))}
                 />
