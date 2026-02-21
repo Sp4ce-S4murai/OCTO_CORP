@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToRoom, updatePlayerNested, updatePlayer } from "@/lib/database";
-import { RoomData, CharacterSheet } from "@/types/character";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog } from "@/lib/database";
+import { RoomData, CharacterSheet, RollLog } from "@/types/character";
 import { User, Activity } from "lucide-react";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
@@ -43,11 +43,38 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             newHealth = 0;
         }
 
-        // We use updatePlayerNested to send multiple fields at root level of the player
         updatePlayer(roomId, playerId, {
             "vitals/health/current": newHealth,
             "vitals/wounds/current": newWounds,
         } as any);
+
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: char.name || "UNIDADE",
+            playerId: char.id,
+            statName: 'DANO DIRETO',
+            statValue: damage,
+            roll: 0,
+            result: 'Warden Damage'
+        });
+    };
+
+    const handleStress = (playerId: string, amount: number) => {
+        const char = roomData?.players?.[playerId];
+        if (!char || amount === 0) return;
+
+        const newStress = Math.max(char.vitals.stress.min, char.vitals.stress.current + amount);
+        updatePlayerNested(roomId, playerId, "vitals/stress/current", newStress);
+
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: char.name || "UNIDADE",
+            playerId: char.id,
+            statName: amount > 0 ? 'ACRÉSCIMO DE STRESS' : 'REDUÇÃO DE STRESS',
+            statValue: Math.abs(amount),
+            roll: 0,
+            result: 'Warden Stress'
+        });
     };
 
     if (loading) {
@@ -78,6 +105,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             character={player}
                             onUpdate={(path, val) => handleUpdate(player.id, path, val)}
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
+                            onStress={(amount) => handleStress(player.id, amount)}
                         />
                     ))}
                 </div>
@@ -91,7 +119,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     );
 }
 
-function MiniSheet({ character, onUpdate, onDamage }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void }) {
+function MiniSheet({ character, onUpdate, onDamage, onStress }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void, onStress: (val: number) => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     return (
@@ -171,10 +199,17 @@ function MiniSheet({ character, onUpdate, onDamage }: { character: CharacterShee
                         </div>
                         <div className="flex justify-between items-center bg-amber-950/20 p-1 border border-amber-900/50">
                             <span className="text-[10px] pl-1 text-amber-600">STRESS</span>
-                            <div className="flex items-center text-xs pr-1">
+                            <div className="flex items-center text-xs pr-1 group/stress">
                                 <input type="number" className="w-6 bg-transparent text-right outline-none text-amber-400 focus:bg-amber-900/50 font-bold" value={character.vitals.stress.current || 0} onChange={(e) => onUpdate("vitals/stress/current", Number(e.target.value))} />
                                 <span className="text-amber-800/50 mx-1">/</span>
                                 <span className="text-amber-700/50">{character.vitals.stress.min}</span>
+                                <button
+                                    onClick={() => onStress(1)}
+                                    className="ml-2 bg-amber-950/80 hover:bg-amber-900 text-amber-300 text-[10px] px-1 font-bold border-l border-amber-800 transition-colors"
+                                    title="Pânico Diretor (+1 Stress)"
+                                >
+                                    +1
+                                </button>
                             </div>
                         </div>
                     </div>

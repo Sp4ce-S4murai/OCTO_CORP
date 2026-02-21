@@ -38,6 +38,8 @@ export function TerminalLog({ roomId }: { roomId: string }) {
             case 'Failure': return 'text-amber-600';
             case 'Panic Fail': return 'text-red-500 font-bold bg-red-900/50 px-2 animate-pulse';
             case 'Panic Success': return 'text-sky-400 font-bold bg-sky-900/30 px-1';
+            case 'Warden Damage': return 'text-red-500 font-bold bg-red-950/80 px-2';
+            case 'Warden Stress': return 'text-amber-500 font-bold bg-amber-950/80 px-2';
             default: return 'text-zinc-500';
         }
     };
@@ -52,23 +54,36 @@ export function TerminalLog({ roomId }: { roomId: string }) {
                 {logs.length === 0 && <div className="text-emerald-900">Aguardando telemetria...</div>}
                 {logs.map(log => {
                     const isPanic = log.result.includes('Panic');
+                    const isWarden = log.result.includes('Warden');
                     const hasMod = !!log.modifier;
 
                     return (
-                        <div key={log.id} className={`border-l-2 pl-2 py-1 ${isPanic ? 'border-amber-600/50 bg-amber-950/10' : 'border-emerald-900/30'}`}>
+                        <div key={log.id} className={`border-l-2 pl-2 py-1 ${isPanic ? 'border-amber-600/50 bg-amber-950/10' : isWarden ? 'border-red-900/80' : 'border-emerald-900/30'}`}>
                             <span className="text-emerald-600/70 text-xs">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
-                            <span className="text-emerald-400 font-bold">{log.playerName}</span> testou{' '}
-                            {isPanic ? (
-                                <span className="text-amber-500 font-bold">PÂNICO (vs {log.statValue})</span>
+
+                            {isWarden ? (
+                                <>
+                                    <span className="text-red-500 font-bold">Warden Override:</span>{' '}
+                                    <span className="text-emerald-500">Alvo {log.playerName} sofreu </span>
+                                    <span className="text-zinc-300 font-bold">{log.statValue}</span>{' '}
+                                    <span className={`uppercase ${getResultColor(log.result)}`}>{log.statName}</span>
+                                </>
                             ) : (
-                                <span className="text-emerald-400">
-                                    {log.statName} ({log.statValue})
-                                    {hasMod && <span className="text-emerald-300"> + {log.modifier!.name} (+{log.modifier!.value})</span>}
-                                    {hasMod && <span className="text-emerald-500"> = Alvo ({log.statValue + log.modifier!.value})</span>}
-                                </span>
-                            )}{' '}
-                            <span className="text-emerald-700">rolando</span> <span className="font-bold text-zinc-300">{log.roll.toString().padStart(isPanic ? 1 : 2, '0')}</span>{' '}
-                            {'=>'} <span className={`uppercase ${getResultColor(log.result)}`}>{log.result}</span>
+                                <>
+                                    <span className="text-emerald-400 font-bold">{log.playerName}</span> testou{' '}
+                                    {isPanic ? (
+                                        <span className="text-amber-500 font-bold">PÂNICO (vs {log.statValue})</span>
+                                    ) : (
+                                        <span className="text-emerald-400">
+                                            {log.statName} ({log.statValue})
+                                            {hasMod && <span className="text-emerald-300"> + {log.modifier!.name} (+{log.modifier!.value})</span>}
+                                            {hasMod && <span className="text-emerald-500"> = Alvo ({log.statValue + log.modifier!.value})</span>}
+                                        </span>
+                                    )}{' '}
+                                    <span className="text-emerald-700">rolando</span> <span className="font-bold text-zinc-300">{log.roll.toString().padStart(isPanic ? 1 : 2, '0')}</span>{' '}
+                                    {'=>'} <span className={`uppercase ${getResultColor(log.result)}`}>{log.result}</span>
+                                </>
+                            )}
                         </div>
                     );
                 })}

@@ -67,5 +67,5 @@ export interface RollLog {
     statValue: number;
     modifier?: { name: string; value: number }; // +10, +15, +20
     roll: number;
-    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success';
+    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress';
 }

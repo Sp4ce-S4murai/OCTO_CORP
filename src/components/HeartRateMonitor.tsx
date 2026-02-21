@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface Props {
     currentHp: number;
@@ -8,21 +9,11 @@ interface Props {
 }
 
 export function HeartRateMonitor({ currentHp, maxHp, stress, isDead }: Props) {
-    if (isDead) {
-        return (
-            <div className="w-full h-8 bg-red-950/20 border border-red-900/50 flex items-center justify-center relative overflow-hidden group">
-                {/* Flatline effect */}
-                <div className="absolute inset-0 flex items-center">
-                    <div className="w-full h-[2px] bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)] opacity-80"></div>
-                </div>
-                {/* Visual noise/static effect */}
-                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-50 mix-blend-overlay pointer-events-none"></div>
-                {/* Scanline passing by */}
-                <div className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-red-500/20 to-transparent -left-1/4 animate-[scanline_3s_linear_infinite]"></div>
-            </div>
-        );
-    }
+    const [soundEnabled, setSoundEnabled] = useState(false);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Speed Calculation
     const ratio = currentHp / maxHp;
 
     let colorClass = "stroke-emerald-500 shadow-emerald-500";
@@ -40,9 +31,78 @@ export function HeartRateMonitor({ currentHp, maxHp, stress, isDead }: Props) {
     }
 
     // Stress Modifier (0 to 20)
-    // The higher the stress, the faster the base speed gets multiplied, up to 3x faster at stress 20.
     const stressFactor = Math.min(stress / 20, 1); // 0.0 to 1.0
     const finalSpeed = Math.max(0.4, baseSpeed - (baseSpeed * 0.7 * stressFactor));
+
+    // Audio Synthetic Engine
+    useEffect(() => {
+        if (!soundEnabled || isDead) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (audioCtxRef.current) {
+                audioCtxRef.current.close().catch(console.error);
+                audioCtxRef.current = null;
+            }
+            return;
+        }
+
+        // Initialize Context
+        if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+
+        const playBeep = () => {
+            if (!audioCtxRef.current) return;
+            const ctx = audioCtxRef.current;
+
+            // Create Oscillator
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            // Determine pitch based on stress -> high stress = higher pitch pip
+            osc.frequency.value = 600 + (stressFactor * 400);
+            if (currentHp <= 3) osc.frequency.value += 300; // Extra frantic pitch for dying
+
+            osc.type = 'sine';
+
+            // Envelope
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.05); // volume
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.2);
+        };
+
+        // Every time finalSpeed changes, we reset the interval to match the CSS animation loop
+        // finalSpeed is in SECONDS. Interval works in ms.
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        intervalRef.current = setInterval(() => {
+            playBeep();
+        }, finalSpeed * 1000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [soundEnabled, isDead, finalSpeed, stressFactor, currentHp]);
+
+    if (isDead) {
+        return (
+            <div className="w-full h-8 bg-red-950/20 border border-red-900/50 flex items-center justify-center relative overflow-hidden group">
+                {/* Flatline effect */}
+                <div className="absolute inset-0 flex items-center">
+                    <div className="w-full h-[2px] bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)] opacity-80"></div>
+                </div>
+                {/* Visual noise/static effect */}
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-50 mix-blend-overlay pointer-events-none"></div>
+                {/* Scanline passing by */}
+                <div className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-red-500/20 to-transparent -left-1/4 animate-[scanline_3s_linear_infinite]"></div>
+            </div>
+        );
+    }
 
     // Choose SVG Path complexity based on stress
     // Low stress = normal EKG
@@ -94,6 +154,15 @@ export function HeartRateMonitor({ currentHp, maxHp, stress, isDead }: Props) {
                     <path d={pathD2} />
                 </g>
             </svg>
+
+            {/* Audio Toggle Button - Absolute Floating */}
+            <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded transition-colors z-10 ${soundEnabled ? 'text-emerald-500 bg-emerald-950/50 hover:bg-emerald-900' : 'text-zinc-600 bg-zinc-950/80 hover:bg-zinc-800'}`}
+                title="Alternar Bip Cardíaco"
+            >
+                {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            </button>
         </div>
     );
 }
