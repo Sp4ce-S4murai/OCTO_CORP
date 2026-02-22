@@ -43,8 +43,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     };
 
     const handleStartCombat = () => {
-        const order = getCurrentOrder();
-        startEncounter(roomId, order);
+        startEncounter(roomId);
         pushLog(roomId, {
             timestamp: getTimestamp(),
             playerName: "SISTEMA",
@@ -534,7 +533,7 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onAddCondition, on
                     type="text"
                     value={character.name || "NOME INDISPONÍVEL"}
                     onChange={(e) => onUpdate("name", e.target.value)}
-                    className={`bg-transparent font-bold uppercase outline-none w-full ${isDead ? 'text-red-500' : 'text-emerald-300 focus:bg-emerald-950/50'}`}
+                    className={`bg-transparent font-bold outline-none w-full ${isDead ? 'text-red-500' : 'text-emerald-300 focus:bg-emerald-950/50'}`}
                 />
                 <div className="flex items-center">
                     <span className={`text-[10px] px-2 py-1 uppercase ml-2 whitespace-nowrap ${isDead ? 'text-red-800 bg-red-950/50' : 'text-emerald-700 bg-emerald-950/30'}`}>{character.characterClass}</span>

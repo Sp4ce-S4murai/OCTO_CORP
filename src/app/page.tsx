@@ -339,7 +339,7 @@ export default function Home() {
                     type="text"
                     value={wardenRoomId}
                     onChange={(e) => setWardenRoomId(e.target.value)}
-                    className="bg-zinc-900/50 border border-emerald-800 p-2 outline-none focus:border-emerald-400 active:bg-zinc-900 text-emerald-300 font-bold uppercase tracking-widest"
+                    className="bg-zinc-900/50 border border-emerald-800 p-2 outline-none focus:border-emerald-400 active:bg-zinc-900 text-emerald-300 font-bold tracking-widest"
                     placeholder="ex: OMEGA-4"
                     required
                   />
@@ -407,7 +407,7 @@ export default function Home() {
                         type="text"
                         value={newCharName}
                         onChange={(e) => setNewCharName(e.target.value)}
-                        className="bg-zinc-950 border border-emerald-700 p-2 outline-none focus:border-emerald-400 text-emerald-300 font-bold uppercase tracking-widest"
+                        className="bg-zinc-950 border border-emerald-700 p-2 outline-none focus:border-emerald-400 text-emerald-300 font-bold tracking-widest"
                         placeholder="ex: JOHN_DOE_87"
                         required
                         autoFocus
@@ -443,7 +443,7 @@ export default function Home() {
                     type="text"
                     value={joinRoomId}
                     onChange={(e) => setJoinRoomId(e.target.value)}
-                    className="bg-zinc-900/50 border border-emerald-800 p-2 outline-none focus:border-emerald-400 active:bg-zinc-900 text-emerald-300 font-bold uppercase tracking-widest"
+                    className="bg-zinc-900/50 border border-emerald-800 p-2 outline-none focus:border-emerald-400 active:bg-zinc-900 text-emerald-300 font-bold tracking-widest"
                     placeholder="Buscar Sinal..."
                     required
                   />

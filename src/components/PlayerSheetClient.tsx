@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, addTerminalLog } from "@/lib/database";
 import { CharacterSheet, EncounterState } from "@/types/character";
-import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, HeartPulse, ChevronDown, ChevronRight } from "lucide-react";
+import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
 import { SkillTreeSelector } from "./SkillTreeSelector";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 import { EnvironmentPanel } from "./EnvironmentPanel";
-import { EnvironmentState, Consequence } from "@/types/character";
+import { EnvironmentState } from "@/types/character";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
 
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
@@ -558,8 +558,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             </div>
                             <div className="mt-4 flex flex-col md:flex-row gap-6">
                                 <div className="flex-1 flex flex-col gap-4">
-                                    <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} disabled={isRoomLocked || isDead} uppercase={true} />
-                                    <InputGroup label="FUNÇÃO" value={character.characterClass || 'NENHUMA'} onChange={() => { }} disabled={true} uppercase={true} />
+                                    <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} disabled={isRoomLocked || isDead} />
+                                    <InputGroup label="FUNÇÃO" value={character.characterClass || 'NENHUMA'} onChange={() => { }} disabled={true} />
                                 </div>
 
                                 {/* COMPACT VITALS */}
@@ -709,7 +709,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 }
 
 // Helpers
-function InputGroup({ label, value, onChange, disabled, uppercase = false }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean; uppercase?: boolean }) {
+function InputGroup({ label, value, onChange, disabled }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
     const [local, setLocal] = useState(value);
     const timeoutRef = useRef<any>(null);
 
@@ -718,9 +718,8 @@ function InputGroup({ label, value, onChange, disabled, uppercase = false }: { l
     }, [value]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // Strip special characters — allow: letters (incl. accented), numbers, spaces, hyphens, dots, slashes
-        const sanitized = e.target.value.replace(/[^a-zA-Z0-9À-ÿ .'\-\/]/g, '');
-        const val = uppercase ? sanitized.toUpperCase() : sanitized;
+        // Strip special characters while preserving case.
+        const val = e.target.value.replace(/[^a-zA-Z0-9À-ÿ .'\-\/]/g, '');
         setLocal(val);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => onChange(val), 500);
@@ -734,7 +733,7 @@ function InputGroup({ label, value, onChange, disabled, uppercase = false }: { l
                 type="text"
                 value={local}
                 onChange={handleChange}
-                className="bg-transparent border-b border-emerald-800 text-emerald-300 outline-none focus:border-emerald-400 focus:bg-emerald-950/20 px-1 py-1 uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-transparent border-b border-emerald-800 text-emerald-300 outline-none focus:border-emerald-400 focus:bg-emerald-950/20 px-1 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
             />
         </div>
     );

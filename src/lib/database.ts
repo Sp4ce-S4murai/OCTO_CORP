@@ -125,7 +125,7 @@ export const addTerminalLog = pushLog; // Alias for backward compatibility if ne
 
 // --- ENCOUNTER SYSTEM ---
 
-export const startEncounter = async (roomId: string, playerIds: string[]) => {
+export const startEncounter = async (roomId: string) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
     const initialEncounter: EncounterState = {
         isActive: true,
