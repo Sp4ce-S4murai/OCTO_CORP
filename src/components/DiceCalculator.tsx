@@ -60,11 +60,42 @@ export function DiceCalculator({ roomId, character }: Props) {
         if (isProcessing) return;
         setIsProcessing(true);
 
+        const activeConsequences = character.consequences || [];
+        // Parse path
+        const [category, stat] = selectedStatPath.split('.');
+
+        // Find if there is advantage or disadvantage for this specific stat
+        let hasAdvantage = false;
+        let hasDisadvantage = false;
+
+        activeConsequences.forEach(c => {
+            if (c.target_stat === 'all' || c.target_stat === stat || c.target_stat === category) {
+                if (c.modifier_type === 'advantage') hasAdvantage = true;
+                if (c.modifier_type === 'disadvantage') hasDisadvantage = true;
+            }
+        });
+
+        // Resolve double modifiers (they cancel out)
+        if (hasAdvantage && hasDisadvantage) {
+            hasAdvantage = false;
+            hasDisadvantage = false;
+        }
+
         let rawRoll = 0;
 
         if (isVirtualRoll) {
             // RNG D100 (0-99)
-            rawRoll = Math.floor(Math.random() * 100);
+            if (hasAdvantage) {
+                const r1 = Math.floor(Math.random() * 100);
+                const r2 = Math.floor(Math.random() * 100);
+                rawRoll = Math.min(r1, r2); // Lower is better
+            } else if (hasDisadvantage) {
+                const r1 = Math.floor(Math.random() * 100);
+                const r2 = Math.floor(Math.random() * 100);
+                rawRoll = Math.max(r1, r2); // Higher is worse
+            } else {
+                rawRoll = Math.floor(Math.random() * 100);
+            }
             setRollStr(rawRoll.toString().padStart(2, '0'));
         } else {
             rawRoll = parseInt(rollStr, 10);
@@ -75,8 +106,6 @@ export function DiceCalculator({ roomId, character }: Props) {
             }
         }
 
-        // Parse path
-        const [category, stat] = selectedStatPath.split('.');
         const statName = stat.toUpperCase();
         let statValue = 0;
 
@@ -108,8 +137,8 @@ export function DiceCalculator({ roomId, character }: Props) {
             timestamp: Date.now(),
             playerName: character.name || "UNIDADE",
             playerId: character.id,
-            statName,
-            statValue,
+            statName: hasAdvantage ? `${statName} (Vantagem)` : (hasDisadvantage ? `${statName} (Desvantagem)` : statName),
+            statValue: targetValue, // Save target value to show diff
             roll: rawRoll,
             result: resolveResult,
         };
@@ -162,7 +191,7 @@ export function DiceCalculator({ roomId, character }: Props) {
 
         const currentStress = character.vitals.stress.current || 0;
 
-        // Panic Rule: Roll > Stress Current
+        // Panic Rule: Roll > Stress (success = roll higher than stress, max stress is 20)
         const passed = rawRoll > currentStress;
         const resolveResult: RollLog['result'] = passed ? 'Panic Success' : 'Panic Fail';
 
@@ -195,7 +224,7 @@ export function DiceCalculator({ roomId, character }: Props) {
                 </h3>
                 <p className="text-amber-200 text-sm mb-4">
                     O sistema nervoso central excedeu o limite seguro. Teste contra <span className="font-bold">Stress Atual ({character.vitals.stress.current})</span> rolando 1d20.
-                    É necessário rolar um valor <span className="font-bold underline">MAIOR</span> que o Stress.
+                    É necessário rolar um valor <span className="font-bold underline">MAIOR</span> que o Stress para sucesso.
                 </p>
 
                 <div className="flex flex-wrap gap-4 items-end">
@@ -237,6 +266,16 @@ export function DiceCalculator({ roomId, character }: Props) {
                 <span>Calculador de Teste</span>
                 <span className="text-xs font-normal text-emerald-700">D100 MÓDULO</span>
             </h3>
+
+            {(character.consequences && character.consequences.length > 0) && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                    {character.consequences.map(c => (
+                        <div key={c.id} className={`text-[10px] px-2 py-1 font-bold uppercase tracking-widest border border-dashed ${c.type === 'buff' ? 'text-blue-400 border-blue-900 bg-blue-950/30' : 'text-amber-500 border-amber-900 bg-amber-950/30'}`}>
+                            [CONDIÇÃO] {c.name}: {c.ui_description}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col sm:flex-row gap-4">

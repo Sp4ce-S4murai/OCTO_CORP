@@ -32,6 +32,19 @@ export interface Skills {
     master: Record<string, SkillNode>;
 }
 
+export interface Consequence {
+    id: string;
+    name: string;
+    type: 'buff' | 'debuff' | 'status' | 'lock' | 'damage' | 'permanent' | 'forced_action';
+    target_stat: 'combat' | 'intellect' | 'physical' | 'all' | 'panic' | 'stress' | 'hp' | 'attribute' | string;
+    modifier_type: 'advantage' | 'disadvantage' | 'math_add' | 'math_sub' | 'percentage_drop';
+    modifier_value: number | null;
+    duration_type: 'rolls' | 'turns' | 'minutes' | 'permanent' | 'instant';
+    duration_value: number | null;
+    ui_description: string;
+    is_fatal?: boolean; // If true, immediately kills the character upon application
+}
+
 export interface CharacterSheet {
     id: string; // Unique ID scoped within the room
     name: string;
@@ -50,6 +63,7 @@ export interface CharacterSheet {
 
     vitals: Vitals;
     skills: Skills;
+    consequences?: Consequence[]; // Entropy/Panic debuffs
 }
 
 export interface EnvironmentState {
@@ -89,5 +103,5 @@ export interface RollLog {
     statValue: number;
     modifier?: { name: string; value: number }; // +10, +15, +20
     roll: number;
-    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Message';
+    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Panic' | 'Warden Message' | 'Tabela de Pânico';
 }

@@ -3,10 +3,12 @@
 import { useEffect, useState, useMemo } from "react";
 import { CharacterSheet, Skills, SkillNode, CharacterClass } from "@/types/character";
 import { updatePlayer } from "@/lib/database";
+import { ChevronDown, ChevronRight, Lock } from "lucide-react";
 
 interface Props {
     roomId: string;
     character: CharacterSheet;
+    isLocked?: boolean;
 }
 
 // Flat representation of the complex Skill Tree
@@ -63,8 +65,8 @@ export const RAW_SKILLS: SkillNode[] = [
     { name: "Especialização em Combate", tier: "Maestrias (+20)", isActive: false, prerequisites: ["Armas de Fogo", "Briga"] },
 ];
 
-export function SkillTreeSelector({ roomId, character }: Props) {
-    // We hydrate a flat array from the saved skills trees
+export function SkillTreeSelector({ roomId, character, isLocked = false }: Props) {
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const [flatSkills, setFlatSkills] = useState<{ [key: string]: SkillNode }>({});
 
     useEffect(() => {
@@ -103,7 +105,9 @@ export function SkillTreeSelector({ roomId, character }: Props) {
 
     // Sync to database automatically when modifying
     const handleToggle = async (skillName: string, currentlyActive: boolean) => {
-        const skill = flatSkills[skillName];
+        if (isLocked) return;
+
+        const skill = RAW_SKILLS.find(s => s.name === skillName);
         if (!skill) return;
 
         // Check prerequisites if turning ON
@@ -147,14 +151,14 @@ export function SkillTreeSelector({ roomId, character }: Props) {
                     return (
                         <label
                             key={skill.name}
-                            className={`flex items-center gap-2 p-1 px-2 border ${isActive ? 'bg-emerald-900/40 border-emerald-600' : 'bg-transparent border-transparent'} hover:bg-emerald-950/40 transition-colors ${!hasMetReq ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                            className={`flex items-center gap-2 p-1 px-2 border ${isActive ? 'bg-emerald-900/40 border-emerald-600' : 'bg-transparent border-transparent'} transition-colors ${!hasMetReq || isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-emerald-950/40'}`}
                         >
                             <input
                                 type="checkbox"
                                 checked={isActive}
-                                disabled={isCompulsory || !hasMetReq}
+                                disabled={isCompulsory || !hasMetReq || isLocked}
                                 onChange={() => handleToggle(skill.name, isActive)}
-                                className="accent-emerald-500 bg-zinc-950 border-emerald-900"
+                                className="accent-emerald-500 bg-zinc-950 border-emerald-900 cursor-pointer disabled:cursor-not-allowed"
                             />
                             <span className={`text-sm ${isActive ? 'text-emerald-300 font-bold' : 'text-emerald-700'} ${isCompulsory ? 'underline decoration-amber-500' : ''}`}>
                                 {skill.name}
@@ -167,17 +171,37 @@ export function SkillTreeSelector({ roomId, character }: Props) {
     };
 
     return (
-        <div className="bg-zinc-950/50 border border-emerald-900 p-4 mb-6">
-            <h3 className="text-emerald-500 font-bold mb-4 uppercase text-lg border-b border-emerald-900 pb-2">
-                Matriz de Perícias
-            </h3>
-            <p className="text-xs text-emerald-700 mb-6">Módulos com sublinhado laranja são pré-carregados pelo genoma da Classe ativa e não podem ser desinstalados. Expertises e Maestrias requerem que um nó-pilar esteja previamente ativo.</p>
+        <div className="bg-zinc-950/50 border border-emerald-900 mb-6">
+            <div
+                className="p-4 flex justify-between items-center cursor-pointer hover:bg-emerald-950/20 transition-colors"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+            >
+                <div className="flex items-center gap-2">
+                    {isCollapsed ? <ChevronRight size={20} className="text-emerald-600" /> : <ChevronDown size={20} className="text-emerald-500" />}
+                    <h3 className="text-emerald-500 font-bold uppercase text-lg">
+                        Matriz de Perícias
+                    </h3>
+                    {isLocked && <span title="Bloqueado pelo Diretor"><Lock size={14} className="text-red-500 ml-2 animate-pulse" /></span>}
+                </div>
 
-            <div className="flex flex-col md:flex-row gap-8">
-                {renderColumn("Básicas (+10)", "Básicas")}
-                {renderColumn("Expertises (+15)", "Expertises")}
-                {renderColumn("Maestrias (+20)", "Maestrias")}
+                {isCollapsed && (
+                    <span className="text-xs text-emerald-700 uppercase tracking-widest hidden sm:block">
+                        {RAW_SKILLS.filter(s => isSkillActive(s.name)).length} Ativas
+                    </span>
+                )}
             </div>
+
+            {!isCollapsed && (
+                <div className="p-4 border-t border-emerald-900/50">
+                    <p className="text-xs text-emerald-700 mb-6">Módulos com sublinhado laranja são pré-carregados pelo genoma da Classe ativa e não podem ser desinstalados. Expertises e Maestrias requerem que um nó-pilar esteja previamente ativo.</p>
+
+                    <div className="flex flex-col md:flex-row gap-8">
+                        {renderColumn("Básicas (+10)", "Básicas")}
+                        {renderColumn("Expertises (+15)", "Expertises")}
+                        {renderColumn("Maestrias (+20)", "Maestrias")}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

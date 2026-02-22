@@ -195,17 +195,97 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         const char = roomData?.players?.[playerId];
         if (!char || amount === 0) return;
 
-        const newStress = Math.max(char.vitals.stress.min, char.vitals.stress.current + amount);
+        const isAtMax = char.vitals.stress.current >= 20;
+        // Cap stress at 20
+        const newStress = Math.min(20, Math.max(char.vitals.stress.min, char.vitals.stress.current + amount));
         updatePlayerNested(roomId, playerId, "vitals/stress/current", newStress);
+
+        if (isAtMax) {
+            // Already at max, trigger panic directly via dedicated log
+            pushLog(roomId, {
+                timestamp: getTimestamp(),
+                playerName: char.name || "UNIDADE",
+                playerId: char.id,
+                statName: 'PÂNICO ACTIVADO (STRESS MAX)',
+                statValue: newStress,
+                roll: 0,
+                result: 'Warden Panic'
+            });
+        } else {
+            pushLog(roomId, {
+                timestamp: getTimestamp(),
+                playerName: char.name || "UNIDADE",
+                playerId: char.id,
+                statName: 'AUMENTO DE STRESS',
+                statValue: amount,
+                roll: 0,
+                result: 'Warden Stress'
+            });
+        }
+    };
+
+    const handleAddCondition = (playerId: string) => {
+        const char = roomData?.players?.[playerId];
+        if (!char) return;
+
+        const conditionName = window.prompt("Nome da Condição:");
+        if (!conditionName) return;
+        const conditionDesc = window.prompt("Descrição/Efeito da Condição:");
+        if (!conditionDesc) return;
+
+        const isFatal = window.confirm("Esta Condição é FATAL? (Causa Morte Imediata ao Jogador)");
+
+        const newConsequence = {
+            id: crypto.randomUUID(),
+            name: conditionName,
+            type: isFatal ? "damage" : "debuff",
+            target_stat: "all",
+            modifier_type: "disadvantage",
+            modifier_value: null,
+            duration_type: "permanent",
+            duration_value: null,
+            ui_description: conditionDesc,
+            is_fatal: isFatal
+        };
+
+        const existingConsequences = char.consequences || [];
+        const newConsequences = [...existingConsequences, newConsequence as any];
+
+        if (isFatal) {
+            updatePlayer(roomId, char.id, {
+                consequences: newConsequences,
+                "vitals/health/current": 0,
+                "vitals/wounds/current": char.vitals.wounds.max
+            } as any);
+        } else {
+            updatePlayer(roomId, char.id, { consequences: newConsequences });
+        }
 
         pushLog(roomId, {
             timestamp: getTimestamp(),
-            playerName: char.name || "UNIDADE",
-            playerId: char.id,
-            statName: amount > 0 ? 'ACRÉSCIMO DE STRESS' : 'REDUÇÃO DE STRESS',
-            statValue: Math.abs(amount),
+            playerName: "SISTEMA MOTHERSHIP",
+            playerId: "sys",
+            statName: `CONDIÇÃO APLICADA: ${char.name} > ${conditionName}`,
+            statValue: 0,
             roll: 0,
-            result: 'Warden Stress'
+            result: 'Tabela de Pânico'
+        });
+    };
+
+    const handleTriggerPanic = (playerId: string) => {
+        const char = roomData?.players?.[playerId];
+        if (!char) return;
+
+        // Just push the 'Warden Panic' log - player's client intercepts and shows the panic modal
+        // Do NOT modify stress here - only failure adds +1 stress
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA MOTHERSHIP",
+            playerId: char.id,
+            statName: `TESTE DE PÂNICO FORÇADO: ${char.name}`,
+            statValue: char.vitals.stress.current,
+            roll: 0,
+            result: 'Warden Panic'
         });
     };
 
@@ -369,6 +449,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             onUpdate={(path, val) => handleUpdate(player.id, path, val)}
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
+                            onAddCondition={() => handleAddCondition(player.id)}
                             onInspect={() => setSelectedPlayerId(player.id)}
                             onMoveUp={() => movePlayer(player.id, 'UP')}
                             onMoveDown={() => movePlayer(player.id, 'DOWN')}
@@ -408,6 +489,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     character={roomData.players[selectedPlayerId]}
                     onClose={() => setSelectedPlayerId(null)}
                     onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val)}
+                    onTriggerPanic={() => { handleTriggerPanic(selectedPlayerId); setSelectedPlayerId(null); }}
                 />
             )}
         </main>
@@ -419,6 +501,7 @@ interface MiniSheetProps {
     onUpdate: (path: string, val: string | number | boolean) => void;
     onDamage: (val: number) => void;
     onStress: (val: number) => void;
+    onAddCondition: () => void;
     onInspect: () => void;
     onMoveUp?: () => void;
     onMoveDown?: () => void;
@@ -426,7 +509,7 @@ interface MiniSheetProps {
     isLast?: boolean;
 }
 
-function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveUp, onMoveDown, isFirst, isLast }: MiniSheetProps) {
+function MiniSheet({ character, onUpdate, onDamage, onStress, onAddCondition, onInspect, onMoveUp, onMoveDown, isFirst, isLast }: MiniSheetProps) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     const getAvatarFilterState = () => {
@@ -483,7 +566,6 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveU
                         <div className="flex justify-between items-center bg-zinc-900/50 p-1 border border-emerald-900">
                             <span className={`text-[10px] pl-1 ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>SAÚDE</span>
                             <div className="flex items-center text-xs gap-1">
-                                <span className={isDead ? 'text-red-500' : 'text-emerald-300'}>{character.vitals.health.current} <span className="text-emerald-800">/</span> {character.vitals.health.max}</span>
 
                                 {!isDead && (
                                     <div className="flex ml-1 border border-emerald-800 bg-zinc-950">
@@ -537,6 +619,13 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveU
                                 >
                                     +1
                                 </button>
+                                <button
+                                    onClick={onAddCondition}
+                                    className="ml-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 text-[10px] px-1 font-bold border-l border-amber-800 transition-colors"
+                                    title="Aplicar Condição Manual"
+                                >
+                                    +COND
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -572,7 +661,7 @@ function StatMini({ label, value, isSave }: { label: string, value: number, isSa
 //
 // MÓDULO DE INSPEÇÃO (MODAL DO DIRETOR)
 //
-function PlayerModal({ character, onClose, onUpdate }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: string | number | boolean) => void }) {
+function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: string | number | boolean | any) => void, onTriggerPanic: () => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     return (
@@ -582,8 +671,17 @@ function PlayerModal({ character, onClose, onUpdate }: { character: CharacterShe
                     <X size={24} />
                 </button>
 
-                <h2 className={`text-2xl font-bold tracking-widest border-b pb-4 ${isDead ? 'text-red-500 border-red-900/50' : 'text-emerald-400 border-emerald-900/50'}`}>
-                    INSPEÇÃO DE PROTOCOLO // {character.name || "UNIDADE"}
+                <h2 className={`text-2xl font-bold tracking-widest border-b pb-4 ${isDead ? 'text-red-500 border-red-900/50' : 'text-emerald-400 border-emerald-900/50'} flex justify-between items-center`}>
+                    <span>INSPEÇÃO DE PROTOCOLO // {character.name || "UNIDADE"}</span>
+                    {!isDead && (
+                        <button
+                            onClick={onTriggerPanic}
+                            className="text-xs px-3 py-2 bg-amber-950 border border-amber-700 text-amber-400 hover:bg-amber-900 font-bold uppercase tracking-widest transition-colors"
+                            title="Forçar Teste de Pânico no Jogador"
+                        >
+                            ⚠ TESTE DE PÂNICO
+                        </button>
+                    )}
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -630,6 +728,33 @@ function PlayerModal({ character, onClose, onUpdate }: { character: CharacterShe
                         </div>
                     </div>
                 </div>
+
+                {/* Condições Ativas */}
+                {character.consequences && character.consequences.length > 0 && (
+                    <div className="mt-4 border border-amber-900/50 p-4 bg-amber-950/10">
+                        <h3 className="text-xl border-b border-amber-900/50 pb-2 mb-4 text-amber-500">CONDIÇÕES ATIVAS</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {character.consequences.map(c => (
+                                <div key={c.id} className={`flex items-center gap-2 px-3 py-2 border ${c.is_fatal ? 'bg-red-950/50 border-red-900 text-red-500' : 'bg-zinc-950 border-amber-900/50 text-amber-500'}`}>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold uppercase text-xs tracking-widest">{c.name} {c.is_fatal && '(FATAL)'}</span>
+                                        <span className="opacity-70 text-[10px] italic">{c.ui_description}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const newCons = character.consequences!.filter(x => x.id !== c.id);
+                                            onUpdate("consequences", newCons as any);
+                                        }}
+                                        className="text-red-500/50 hover:text-red-400 p-1 ml-2 transition-colors"
+                                        title="Remover Condição"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

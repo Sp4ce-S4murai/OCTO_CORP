@@ -1,4 +1,4 @@
-import { ref, onValue, set, update, push, remove } from "firebase/database";
+import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
 import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState } from "../types/character";
 
@@ -6,6 +6,7 @@ import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState } f
 const roomPath = (roomId: string) => `rooms/${roomId}`;
 const playerPath = (roomId: string, playerId: string) => `rooms/${roomId}/players/${playerId}`;
 const logsPath = (roomId: string) => `rooms/${roomId}/logs`;
+const userProfilePath = (userId: string) => `users/${userId}/characters`;
 
 // Generic subscription hook logic to be used inside React
 export const subscribeToRoom = (
@@ -29,7 +30,60 @@ export const subscribeToPlayer = (
     });
 };
 
-// Actions
+// --- USER PROFILE ACTIONS ---
+
+export const saveUserCharacter = async (userId: string, character: CharacterSheet) => {
+    // Save to the user's hub
+    const charPath = ref(database, `${userProfilePath(userId)}/${character.id}`);
+    await set(charPath, character);
+};
+
+export const subscribeToUserCharacters = (
+    userId: string,
+    callback: (characters: CharacterSheet[]) => void
+) => {
+    const charsRef = ref(database, userProfilePath(userId));
+    return onValue(charsRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            callback(Object.values(data));
+        } else {
+            callback([]);
+        }
+    });
+};
+
+export const deleteUserCharacter = async (userId: string, characterId: string) => {
+    const charPath = ref(database, `${userProfilePath(userId)}/${characterId}`);
+    await remove(charPath);
+};
+
+// --- ROOM CREATION & AUTH ---
+
+export const createRoom = async (roomId: string, password?: string) => {
+    if (password) {
+        const pswdPath = ref(database, `${roomPath(roomId)}/settings/password`);
+        await set(pswdPath, password);
+    }
+};
+
+export const verifyRoomPassword = async (roomId: string, password?: string): Promise<boolean> => {
+    const pswdPath = ref(database, `${roomPath(roomId)}/settings/password`);
+    const snapshot = await get(pswdPath);
+    const roomPassword = snapshot.val();
+
+    // Se a sala não tem senha configurada, permite a entrada direto.
+    if (!roomPassword) {
+        return true;
+    }
+
+    // Se tem senha, compara com a senha informada.
+    return roomPassword === password;
+};
+
+
+// --- IN-ROOM ACTIONS ---
+
 export const updateEnvironment = async (roomId: string, envData: Partial<EnvironmentState>) => {
     const ePath = ref(database, `${roomPath(roomId)}/environment`);
     await set(ePath, envData);
@@ -66,6 +120,8 @@ export const pushLog = async (roomId: string, log: Omit<RollLog, 'id'>) => {
     const newLogRef = push(lPath);
     await set(newLogRef, { ...log, id: newLogRef.key });
 };
+
+export const addTerminalLog = pushLog; // Alias for backward compatibility if needed
 
 // --- ENCOUNTER SYSTEM ---
 

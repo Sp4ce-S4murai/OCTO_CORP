@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { EnvironmentState } from "@/types/character";
 import { Thermometer, Gauge, Wind, Radiation, Biohazard } from "lucide-react";
-import { HeartRateMonitor } from "./HeartRateMonitor";
 
-export function EnvironmentPanel({ environment, vitals, isDead }: { environment?: EnvironmentState; vitals?: any; isDead?: boolean }) {
+export function EnvironmentPanel({ environment }: { environment?: EnvironmentState }) {
     const [coords, setCoords] = useState({ x: "000", y: "000", z: "000" });
     const [fluctuations, setFluctuations] = useState({
         temp: 0,
@@ -111,69 +110,48 @@ export function EnvironmentPanel({ environment, vitals, isDead }: { environment?
     };
 
     return (
-        <div className="mb-6 flex flex-col xl:flex-row gap-4 items-stretch justify-between font-mono">
+        <div className="mb-4 flex flex-row items-center justify-between gap-4 font-mono text-xs border border-emerald-900/50 bg-zinc-950/40 p-2 overflow-x-auto whitespace-nowrap custom-scrollbar">
 
-            <div className="flex gap-4">
-                {/* Warning Light Cluster (Car Dashboard Style) */}
-                <div className="flex flex-col gap-3 shrink-0 border-l-4 border-emerald-900/50 pl-2 justify-center items-center bg-zinc-950/60 p-2 border-y border-r border-y-emerald-900/10 border-r-emerald-900/10 h-full">
-                    <Thermometer className={getGlow(tempCrit, tempWarn, 'temp')} size={20} />
-                    <Gauge className={getGlow(presCrit, presWarn, 'pres')} size={20} />
-                    <Biohazard className={getGlow(o2Crit, o2Warn, 'o2')} size={20} />
-                    <Radiation className={getGlow(radCrit, radWarn, 'rad')} size={20} />
+            {/* PRESET NAME & COORDS */}
+            <div className="flex items-center gap-3 shrink-0 pr-4 border-r border-emerald-900/30">
+                <div className={`font-bold tracking-widest uppercase ${isMissing ? 'text-red-600 animate-pulse' : 'text-emerald-400'}`}>
+                    {environment?.presetName || 'SINAL PERDIDO'}
                 </div>
-
-                {/* EKG Monitor Copy */}
-                {vitals && (
-                    <div className="w-48 shrink-0 bg-transparent py-2 border-r border-y border-emerald-900/10 pr-2">
-                        <HeartRateMonitor
-                            currentHp={vitals.health?.current || 0}
-                            maxHp={vitals.health?.max || 10}
-                            stress={vitals.stress?.current || 0}
-                            isDead={isDead || false}
-                        />
+                {!isMissing && (
+                    <div className="text-[10px] text-emerald-600 tracking-wider">
+                        X:{coords.x} Y:{coords.y}
                     </div>
                 )}
             </div>
 
-            {/* Brutalist Number Readouts */}
-            <div className="flex-1 flex flex-wrap gap-x-8 gap-y-4 bg-zinc-950/20 p-4 border border-emerald-900/30 content-center">
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-800 uppercase tracking-widest leading-none mb-1">TEMP</span>
-                    <span className={`text-2xl font-bold tracking-tighter ${tempColorStr()}`}>{temp}<span className="text-sm opacity-50 ml-1">°C</span></span>
+            {/* ICONS & SENSORS READOUT */}
+            <div className="flex-1 flex items-center gap-6 text-[10px] uppercase font-bold tracking-widest shrink-0">
+                <div className="flex items-center gap-1.5" title="Temperatura">
+                    <Thermometer className={getGlow(tempCrit, tempWarn, 'temp')} size={14} />
+                    <span className={tempColorStr()}>{temp} <span className="text-[8px] opacity-70">°C</span></span>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-800 uppercase tracking-widest leading-none mb-1">O2</span>
-                    <span className={`text-2xl font-bold tracking-tighter ${o2Crit ? 'text-fuchsia-500' : o2Warn ? 'text-amber-400' : 'text-emerald-500'}`}>{o2}<span className="text-sm opacity-50 ml-1">%</span></span>
+
+                <div className="flex items-center gap-1.5" title="Oxigênio">
+                    <Biohazard className={getGlow(o2Crit, o2Warn, 'o2')} size={14} />
+                    <span className={o2Crit ? 'text-fuchsia-500' : o2Warn ? 'text-amber-400' : 'text-emerald-500'}>{o2} <span className="text-[8px] opacity-70">%</span></span>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-800 uppercase tracking-widest leading-none mb-1">PRES</span>
-                    <span className={`text-2xl font-bold tracking-tighter ${presCrit ? 'text-red-500' : presWarn ? 'text-amber-400' : 'text-emerald-500'}`}>{pres}<span className="text-sm opacity-50 ml-1">ATM</span></span>
+
+                <div className="flex items-center gap-1.5" title="Pressão">
+                    <Gauge className={getGlow(presCrit, presWarn, 'pres')} size={14} />
+                    <span className={presCrit ? 'text-red-500' : presWarn ? 'text-amber-400' : 'text-emerald-500'}>{pres} <span className="text-[8px] opacity-70">ATM</span></span>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-800 uppercase tracking-widest leading-none mb-1">G-FORCE</span>
-                    <span className="text-2xl font-bold tracking-tighter text-emerald-500">{grav}<span className="text-sm opacity-50 ml-1">G</span></span>
+
+                <div className="flex items-center gap-1.5" title="Gravidade">
+                    <span className="text-emerald-800">G:</span>
+                    <span className="text-emerald-500">{grav}</span>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-800 uppercase tracking-widest leading-none mb-1">rad</span>
-                    <span className={`text-2xl font-bold tracking-tighter ${radCrit ? 'text-green-500' : radWarn ? 'text-amber-400' : 'text-emerald-500'}`}>{rad}<span className="text-sm opacity-50 ml-1">mSv</span></span>
+
+                <div className="flex items-center gap-1.5" title="Radiação">
+                    <Radiation className={getGlow(radCrit, radWarn, 'rad')} size={14} />
+                    <span className={radCrit ? 'text-green-500' : radWarn ? 'text-amber-400' : 'text-emerald-500'}>{rad} <span className="text-[8px] opacity-70">mSv</span></span>
                 </div>
             </div>
 
-            {/* Coordinates & Preset Name */}
-            <div className="shrink-0 flex flex-col justify-between items-end bg-zinc-950/40 p-2 border-r-4 border-emerald-900/50 min-w-[150px]">
-                <div className="text-right w-full">
-                    <div className="text-[9px] text-emerald-800 tracking-widest uppercase mb-1">PROTOCOLO ORBITAL</div>
-                    <div className={`text-xs font-bold ${isMissing ? 'text-red-600 animate-pulse' : 'text-emerald-400 bg-emerald-950/20 px-1 border border-emerald-900/30'}`}>
-                        {environment?.presetName || 'SINAL PERDIDO'}
-                    </div>
-                </div>
-                <div className="text-right mt-4 w-full">
-                    <div className="text-[9px] text-emerald-800 tracking-widest uppercase mb-1">POSIÇÃO ABSOLUTA</div>
-                    <div className="text-[11px] text-emerald-600 font-bold bg-zinc-950 px-2 py-1 tracking-wider border border-emerald-900/30 border-dashed">
-                        X:{coords.x} Y:{coords.y}
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
