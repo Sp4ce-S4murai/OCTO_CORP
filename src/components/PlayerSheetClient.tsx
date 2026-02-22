@@ -718,7 +718,9 @@ function InputGroup({ label, value, onChange, disabled, uppercase = false }: { l
     }, [value]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = uppercase ? e.target.value.toUpperCase() : e.target.value;
+        // Strip special characters — allow: letters (incl. accented), numbers, spaces, hyphens, dots, slashes
+        const sanitized = e.target.value.replace(/[^a-zA-Z0-9À-ÿ .'\-\/]/g, '');
+        const val = uppercase ? sanitized.toUpperCase() : sanitized;
         setLocal(val);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => onChange(val), 500);

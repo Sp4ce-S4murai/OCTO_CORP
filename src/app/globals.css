@@ -13,6 +13,15 @@
     /* emerald-500 */
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   }
+
+  /* Inputs use Share Tech Mono which has clear uppercase vs lowercase differentiation */
+  input[type="text"],
+  input[type="number"],
+  input:not([type]),
+  textarea {
+    font-family: var(--font-share-tech-mono), "Share Tech Mono", "Courier New", monospace;
+    font-size: 0.875rem;
+  }
 }
 
 @layer utilities {
