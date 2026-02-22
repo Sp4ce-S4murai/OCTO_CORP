@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer } from "@/lib/database";
-import { CharacterSheet } from "@/types/character";
-import { Lock, Unlock, User, Upload } from "lucide-react";
+import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn } from "@/lib/database";
+import { CharacterSheet, EncounterState } from "@/types/character";
+import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
@@ -17,6 +17,9 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [isRoomLocked, setIsRoomLocked] = useState(false);
     const [loading, setLoading] = useState(true);
     const [environment, setEnvironment] = useState<EnvironmentState | undefined>(undefined);
+    const [encounter, setEncounter] = useState<EncounterState | undefined>(undefined);
+    const [localInitiative, setLocalInitiative] = useState("");
+    const [activePlayerName, setActivePlayerName] = useState<string>("");
 
     useEffect(() => {
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
@@ -24,7 +27,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 setCharacter(data);
             } else {
                 // Auto-create if not exists based on URL parameter topology constraint
-                const newChar = createEmptyCharacter(playerId, `Jogador ${playerId}`);
+                const newChar = createEmptyCharacter(playerId, playerId);
                 createPlayer(roomId, newChar).then(() => {
                     setCharacter(newChar);
                 });
@@ -42,11 +45,41 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 onValue(ref(database, `rooms/${roomId}/environment`), (snap) => {
                     setEnvironment(snap.val());
                 });
+
+                onValue(ref(database, `rooms/${roomId}/encounter`), (snap) => {
+                    setEncounter(snap.val());
+                });
             });
         });
 
         return () => unsubscribe();
     }, [roomId, playerId]);
+
+    // Fetch active player name during combat
+    useEffect(() => {
+        let unsubscribeName: (() => void) | undefined;
+
+        if (encounter?.isActive && encounter.status === 'active' && encounter.turnOrder?.length > 0) {
+            const activeId = encounter.turnOrder[encounter.currentTurnIndex];
+
+            if (activeId === playerId && character?.name) {
+                setActivePlayerName(character.name);
+            } else {
+                import("@/lib/firebase").then(({ database }) => {
+                    import("firebase/database").then(({ ref, onValue }) => {
+                        const nameRef = ref(database, `rooms/${roomId}/players/${activeId}/name`);
+                        unsubscribeName = onValue(nameRef, (snap) => {
+                            setActivePlayerName(snap.val() || "Desconhecido");
+                        });
+                    });
+                });
+            }
+        }
+
+        return () => {
+            if (unsubscribeName) unsubscribeName();
+        };
+    }, [roomId, playerId, character?.name, encounter?.isActive, encounter?.status, encounter?.turnOrder, encounter?.currentTurnIndex]);
 
     const handleUpdate = (path: string, value: any) => {
         if (!character || isRoomLocked) return;
@@ -95,11 +128,68 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         reader.readAsDataURL(file);
     };
 
+    const handleExport = () => {
+        if (!character) return;
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(character, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `${character.name || 'Ficha'}_${playerId}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    };
+
+    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const parsed = JSON.parse(event.target?.result as string);
+
+                // Preserve the ID of this room's slot to avoid sync issues
+                parsed.id = playerId;
+
+                // Sync the entirely new character to Firebase
+                createPlayer(roomId, parsed).then(() => {
+                    alert("Ficha importada com sucesso!");
+                });
+            } catch (error) {
+                console.error("Failed to parse JSON file", error);
+                alert("O arquivo não é uma ficha válida do O.C.T.O. VTT.");
+            }
+        };
+        reader.readAsText(file);
+
+        // Clear input to allow re-importing same file if desired
+        e.target.value = "";
+    };
+
     if (loading || !character) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Carregando Conexão Neural...</div>;
     }
 
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+
+    // Combat / Encounter Logic
+    const isEncounterActive = encounter?.isActive;
+    const isRollingInitiative = isEncounterActive && encounter?.status === 'rolling';
+    const hasRolledInitiative = isRollingInitiative && encounter?.initiatives?.[playerId] !== undefined;
+
+    const isMyTurn = isEncounterActive && encounter?.status === 'active' && encounter.turnOrder[encounter.currentTurnIndex] === playerId;
+
+    const handleSubmitInitiative = () => {
+        const val = parseInt(localInitiative);
+        if (!isNaN(val)) {
+            submitInitiative(roomId, playerId, val);
+        }
+    };
+
+    const handleEndTurn = () => {
+        if (!encounter) return;
+        nextTurn(roomId, encounter);
+    };
 
     const getAvatarFilterState = () => {
         if (isDead) return 'avatar-filter-critical grayscale opacity-50';
@@ -108,8 +198,39 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         return 'avatar-filter-normal';
     };
 
+    // Global Theme Override based on Combat Turn
+    const activeBorderTheme = isMyTurn ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : (isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80');
+
     return (
-        <main className={`max-w-4xl mx-auto border-2 ${isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80'} p-6 rounded-sm shadow-2xl relative overflow-hidden`}>
+        <main className={`max-w-4xl mx-auto border-2 ${activeBorderTheme} p-6 rounded-sm shadow-2xl relative overflow-hidden transition-all duration-500`}>
+            {/* INITIATIVE POPUP OVERLAY */}
+            {!isDead && isRollingInitiative && !hasRolledInitiative && (
+                <div className="absolute inset-0 bg-zinc-950/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-blue-950/30 border-2 border-blue-500 p-8 flex flex-col items-center gap-6 max-w-md w-full shadow-[0_0_50px_rgba(59,130,246,0.2)]">
+                        <AlertTriangle size={48} className="text-blue-500 animate-pulse" />
+                        <h2 className="text-2xl font-bold uppercase tracking-widest text-blue-400 text-center">Protocolo de Combate Iniciado</h2>
+                        <p className="text-blue-200/70 text-center text-sm">Insira seu valor de iniciativa rolado nos dados para entrar na fila de turnos.</p>
+
+                        <input
+                            type="number"
+                            className="bg-zinc-950 border-2 border-blue-500 text-blue-400 text-4xl text-center p-4 w-32 outline-none focus:border-blue-300 focus:bg-blue-950/50"
+                            placeholder="0"
+                            value={localInitiative}
+                            onChange={(e) => setLocalInitiative(e.target.value)}
+                            autoFocus
+                        />
+
+                        <button
+                            onClick={handleSubmitInitiative}
+                            disabled={!localInitiative}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-widest py-4 border-2 border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Confirmar Iniciativa
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {isDead && (
                 <div className="absolute inset-0 bg-red-950/40 z-10 pointer-events-none flex items-center justify-center">
                     <div className="text-red-500 font-bold text-6xl md:text-9xl opacity-20 rotate-[-15deg] uppercase tracking-widest border-y-8 border-red-500/20 py-4 mix-blend-overlay">
@@ -128,7 +249,21 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <EnvironmentPanel environment={environment} vitals={character.vitals} isDead={isDead} />
             )}
 
-            <header className={`border-b-2 ${isDead ? 'border-red-900' : 'border-emerald-900'} pb-4 mb-6 relative z-20`}>
+            {/* MY TURN BANNER */}
+            {isMyTurn && (
+                <div className="bg-blue-600 text-white font-bold p-3 text-center uppercase tracking-[0.3em] shadow-[0_0_20px_rgba(59,130,246,0.5)] animate-pulse flex items-center justify-center gap-4 mb-6">
+                    <Crosshair size={24} /> É O SEU TURNO <Crosshair size={24} />
+                </div>
+            )}
+
+            {/* ENCOUNTER STATUS BAR (NOT MY TURN) */}
+            {!isMyTurn && isEncounterActive && encounter.status === 'active' && !isDead && (
+                <div className="bg-blue-950/50 border border-blue-900/50 text-blue-400 p-2 text-center text-xs tracking-widest uppercase mb-6 flex items-center justify-center gap-2">
+                    <Swords size={14} /> Combate Ativo - Aguarde seu turno (Rodada {encounter.round}) - Turno de: {activePlayerName}
+                </div>
+            )}
+
+            <header className={`border-b-2 ${isMyTurn ? 'border-blue-500' : (isDead ? 'border-red-900' : 'border-emerald-900')} pb-4 mb-6 relative z-20`}>
                 <div className="flex flex-col md:flex-row gap-6 items-start">
                     {/* AVATAR BOX (3x4 aspect ratio aprox) */}
                     <div className="w-32 h-40 shrink-0 border border-emerald-900 bg-zinc-950 flex flex-col items-center justify-center relative group overflow-hidden scanline-overlay">
@@ -158,9 +293,22 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                     {/* IDENTITY INFO */}
                     <div className="flex-1 w-full">
-                        <h1 className={`text-2xl font-bold uppercase tracking-widest ${isDead ? 'text-red-500' : 'text-emerald-400'}`}>
-                            Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
-                        </h1>
+                        <div className="flex justify-between items-start gap-4 flex-col sm:flex-row">
+                            <h1 className={`text-2xl font-bold uppercase tracking-widest ${isMyTurn ? 'text-blue-400' : (isDead ? 'text-red-500' : 'text-emerald-400')}`}>
+                                Terminal MOTHERSHIP // {roomId} {isDead && "[ SINAL PERDIDO ]"}
+                            </h1>
+                            {!isRoomLocked && !isDead && (
+                                <div className="flex gap-2 self-end sm:self-start">
+                                    <label className="cursor-pointer bg-zinc-900 border border-emerald-900/50 p-2 hover:bg-emerald-950/50 hover:text-emerald-300 text-emerald-600 transition-colors" title="Importar Ficha do Computador">
+                                        <UploadCloud size={18} />
+                                        <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+                                    </label>
+                                    <button onClick={handleExport} className="bg-zinc-900 border border-emerald-900/50 p-2 hover:bg-emerald-950/50 hover:text-emerald-300 text-emerald-600 transition-colors" title="Exportar Ficha para o Computador">
+                                        <Download size={18} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <InputGroup label="NOME" value={character.name} onChange={(v) => handleUpdate("name", v)} disabled={isRoomLocked || isDead} />
                             <InputGroup label="PRONOMES" value={character.pronouns} onChange={(v) => handleUpdate("pronouns", v)} disabled={isRoomLocked || isDead} />
@@ -249,6 +397,18 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <DiceCalculator roomId={roomId} character={character} />
                 <TerminalLog roomId={roomId} />
             </section>
+
+            {/* END TURN STICKY BUTTON */}
+            {isMyTurn && (
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/90 border-t-2 border-blue-500 flex justify-center z-[100] backdrop-blur-sm">
+                    <button
+                        onClick={handleEndTurn}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-12 py-4 font-bold uppercase tracking-widest text-lg border-2 border-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.6)]"
+                    >
+                        ENCERRAR MEU TURNO
+                    </button>
+                </div>
+            )}
         </main>
     );
 }

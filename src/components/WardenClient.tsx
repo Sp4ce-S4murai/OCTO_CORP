@@ -1,19 +1,106 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment } from "@/lib/database";
+
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter } from "@/lib/database";
 import { database } from "@/lib/firebase";
 import { ref, set } from "firebase/database";
-import { RoomData, CharacterSheet, RollLog } from "@/types/character";
-import { User, Activity, Lock, Unlock, Eye, X } from "lucide-react";
+import { RoomData, CharacterSheet } from "@/types/character";
+import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square } from "lucide-react";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
+
+const getTimestamp = () => Date.now();
 
 export default function WardenClient({ roomId }: { roomId: string }) {
     const [roomData, setRoomData] = useState<RoomData | null>(null);
     const [loading, setLoading] = useState(true);
     const [wardenMessage, setWardenMessage] = useState("");
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+
+    const getCurrentOrder = () => {
+        if (!roomData?.players) return [];
+        const allPlayerIds = Object.keys(roomData.players);
+        const savedOrder = roomData.playerOrder || [];
+        const validOrderIds = new Set(savedOrder.filter((id: string) => allPlayerIds.includes(id)));
+        return [...savedOrder.filter((id: string) => validOrderIds.has(id)), ...allPlayerIds.filter((id: string) => !validOrderIds.has(id))];
+    };
+
+    const movePlayer = (playerId: string, direction: 'UP' | 'DOWN') => {
+        if (!roomData?.players) return;
+        const currentOrder = getCurrentOrder();
+        const currentIndex = currentOrder.indexOf(playerId);
+        if (currentIndex === -1) return;
+
+        const newIndex = direction === 'UP' ? currentIndex - 1 : currentIndex + 1;
+        if (newIndex < 0 || newIndex >= currentOrder.length) return;
+
+        const newOrder = [...currentOrder];
+        [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+
+        updatePlayerOrder(roomId, newOrder);
+        setRoomData((prev: RoomData | null) => prev ? { ...prev, playerOrder: newOrder } : prev);
+    };
+
+    const handleStartCombat = () => {
+        const order = getCurrentOrder();
+        startEncounter(roomId, order);
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: 'INICIATIVA REQUISITADA',
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
+
+    const handleBeginTurns = () => {
+        if (!roomData?.encounter || !roomData.players) return;
+
+        // Sort players by initiative descending
+        const initiatives = roomData.encounter.initiatives || {};
+        const entries = Object.entries(initiatives).sort((a, b) => b[1] - a[1]);
+        const sortedIds = entries.map(e => e[0]);
+
+        // Add any missing players at the end
+        const allIds = getCurrentOrder();
+        for (const id of allIds) {
+            if (!sortedIds.includes(id)) {
+                sortedIds.push(id);
+            }
+        }
+
+        beginTurns(roomId, sortedIds);
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: 'COMBATE INICIADO',
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
+
+    const handleNextTurn = () => {
+        if (!roomData?.encounter) return;
+        nextTurn(roomId, roomData.encounter);
+    };
+
+    const handleEndCombat = () => {
+        endEncounter(roomId);
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: 'COMBATE ENCERRADO',
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
 
     const ENVIRONMENT_PRESETS = {
         'Clima Estabilizado': { presetName: 'Clima Estabilizado', temperature: '21', pressure: '1.0', oxygen: '100', luminosity: 'Estável', gravity: '1.0', radiation: '0.1' },
@@ -29,7 +116,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const applyEnvironmentPreset = (presetName: keyof typeof ENVIRONMENT_PRESETS) => {
         updateEnvironment(roomId, ENVIRONMENT_PRESETS[presetName]);
         pushLog(roomId, {
-            timestamp: Date.now(),
+            timestamp: getTimestamp(),
             playerName: "SISTEMA",
             playerId: "SYSTEM",
             statName: `TELEMETRIA AMBIENTAL: ${presetName}`,
@@ -48,12 +135,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         return () => unsubscribe();
     }, [roomId]);
 
-    const handleUpdate = (playerId: string, path: string, value: any) => {
+    const handleUpdate = (playerId: string, path: string, value: string | number | boolean) => {
         const character = roomData?.players?.[playerId];
         if (!character) return;
 
         if (path.startsWith("baseStats/") || path.startsWith("baseSaves/")) {
-            const updates: any = { [path]: value };
+            const updates: Record<string, string | number | boolean> = { [path]: value };
 
             if (path.startsWith("baseStats/")) {
                 const stat = path.split("/")[1] as keyof typeof character.stats;
@@ -91,10 +178,10 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         updatePlayer(roomId, playerId, {
             "vitals/health/current": newHealth,
             "vitals/wounds/current": newWounds,
-        } as any);
+        } as Record<string, number>);
 
         pushLog(roomId, {
-            timestamp: Date.now(),
+            timestamp: getTimestamp(),
             playerName: char.name || "UNIDADE",
             playerId: char.id,
             statName: 'DANO DIRETO',
@@ -112,7 +199,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         updatePlayerNested(roomId, playerId, "vitals/stress/current", newStress);
 
         pushLog(roomId, {
-            timestamp: Date.now(),
+            timestamp: getTimestamp(),
             playerName: char.name || "UNIDADE",
             playerId: char.id,
             statName: amount > 0 ? 'ACRÉSCIMO DE STRESS' : 'REDUÇÃO DE STRESS',
@@ -127,7 +214,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         if (!wardenMessage.trim()) return;
 
         pushLog(roomId, {
-            timestamp: Date.now(),
+            timestamp: getTimestamp(),
             playerName: "DIRETOR",
             playerId: "SYSTEM",
             statName: wardenMessage.trim(),
@@ -145,7 +232,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         set(ref(database, `rooms/${roomId}/isLocked`), newLockState).catch(console.error);
 
         pushLog(roomId, {
-            timestamp: Date.now(),
+            timestamp: getTimestamp(),
             playerName: "SISTEMA",
             playerId: "SYSTEM",
             statName: `PROTOCOLO DE SEGURANÇA: ${newLockState ? 'ATIVADO (FICHAS TRAVADAS)' : 'DESATIVADO (EDIÇÃO LIVRE)'}`,
@@ -159,7 +246,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Sincronizando feed de vídeo...</div>;
     }
 
-    const players = roomData?.players ? Object.values(roomData.players) : [];
+    const orderedPlayers = roomData?.players ? getCurrentOrder().map(id => roomData.players[id]).filter(Boolean) : [];
 
     return (
         <main className="max-w-7xl mx-auto flex flex-col gap-8">
@@ -178,6 +265,75 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     {roomData?.isLocked ? <><Lock size={18} /> TRAVAMENTO MÁXIMO ATIVADO</> : <><Unlock size={18} /> FICHAS LIVRES (DESTRAVADAS)</>}
                 </button>
             </header>
+
+            {/* PAINEL DE COMBATE */}
+            <section className="bg-zinc-950/80 border border-blue-900/50 p-6 flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-bold tracking-widest text-blue-500 flex items-center gap-2 uppercase">
+                        <Swords size={24} /> GERENCIADOR DE COMBATE
+                    </h2>
+
+                    {!roomData?.encounter?.isActive && (
+                        <button onClick={handleStartCombat} className="bg-blue-950/50 hover:bg-blue-900 text-blue-400 border border-blue-800 px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase">
+                            <Swords size={18} /> INICIAR COMBATE
+                        </button>
+                    )}
+
+                    {roomData?.encounter?.isActive && (
+                        <div className="flex gap-4">
+                            {roomData.encounter.status === 'rolling' && (
+                                <button onClick={handleBeginTurns} className="bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800 px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase">
+                                    <Play size={18} /> COMEÇAR TURNOS
+                                </button>
+                            )}
+                            {roomData.encounter.status === 'active' && (
+                                <button onClick={handleNextTurn} className="bg-amber-950/50 hover:bg-amber-900 text-amber-400 border border-amber-800 px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase">
+                                    <SkipForward size={18} /> FORÇAR PRÓXIMO TURNO
+                                </button>
+                            )}
+                            <button onClick={handleEndCombat} className="bg-red-950/50 hover:bg-red-900 text-red-500 border border-red-900 px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase">
+                                <Square size={18} /> ENCERRAR COMBATE
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {roomData?.encounter?.isActive && roomData.encounter.status === 'rolling' && (
+                    <div className="bg-blue-950/20 border border-blue-900/30 p-4">
+                        <h3 className="text-sm text-blue-600 mb-2 uppercase font-bold tracking-widest">Aguardando Rolagens de Iniciativa</h3>
+                        <div className="flex flex-wrap gap-4">
+                            {orderedPlayers.map(player => {
+                                const init = roomData.encounter?.initiatives?.[player.id];
+                                const hasRolled = init !== undefined;
+                                return (
+                                    <div key={player.id} className={`flex items-center gap-2 px-3 py-1 border ${hasRolled ? 'bg-emerald-950/30 border-emerald-900/50 text-emerald-400' : 'bg-zinc-950 border-blue-900/30 text-blue-700/50'}`}>
+                                        <span className="text-xs uppercase font-bold truncate max-w-[150px]">{player.name}</span>
+                                        <span className="text-sm font-mono">{hasRolled ? init : '...'}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {roomData?.encounter?.isActive && roomData.encounter.status === 'active' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="text-xs text-blue-700 font-bold uppercase tracking-widest">FILA DE TURNOS (RODADA {roomData.encounter.round})</div>
+                        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                            {roomData.encounter.turnOrder.map((pid: string, idx: number) => {
+                                const player = roomData.players[pid];
+                                const isCurrent = idx === roomData.encounter?.currentTurnIndex;
+                                return (
+                                    <div key={pid} className={`shrink-0 flex items-center gap-2 px-4 py-2 border ${isCurrent ? 'bg-blue-900 text-blue-100 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse' : 'bg-zinc-950 text-blue-600/50 border-blue-900/30'}`}>
+                                        <span className="text-xs uppercase font-bold">{idx + 1}. {player?.name || 'DESCONHECIDO'}</span>
+                                        <span className="text-xs font-mono opacity-50">[{roomData.encounter?.initiatives?.[pid] || 0}]</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
@@ -201,12 +357,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         </div>
                     </div>
 
-                    {players.length === 0 && (
+                    {orderedPlayers.length === 0 && (
                         <div className="text-emerald-800 p-8 border border-emerald-900/50 bg-emerald-950/10">
                             Nenhuma assinatura vital detectada neste setor.
                         </div>
                     )}
-                    {players.map(player => (
+                    {orderedPlayers.map((player: CharacterSheet, index: number) => (
                         <MiniSheet
                             key={player.id}
                             character={player}
@@ -214,6 +370,10 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
                             onInspect={() => setSelectedPlayerId(player.id)}
+                            onMoveUp={() => movePlayer(player.id, 'UP')}
+                            onMoveDown={() => movePlayer(player.id, 'DOWN')}
+                            isFirst={index === 0}
+                            isLast={index === orderedPlayers.length - 1}
                         />
                     ))}
                 </div>
@@ -254,7 +414,19 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     );
 }
 
-function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect }: { character: CharacterSheet, onUpdate: (path: string, val: any) => void, onDamage: (val: number) => void, onStress: (val: number) => void, onInspect: () => void }) {
+interface MiniSheetProps {
+    character: CharacterSheet;
+    onUpdate: (path: string, val: string | number | boolean) => void;
+    onDamage: (val: number) => void;
+    onStress: (val: number) => void;
+    onInspect: () => void;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
+    isFirst?: boolean;
+    isLast?: boolean;
+}
+
+function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveUp, onMoveDown, isFirst, isLast }: MiniSheetProps) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     const getAvatarFilterState = () => {
@@ -267,6 +439,14 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect }: { cha
     return (
         <div className={`border p-4 shadow-lg flex flex-col gap-4 group relative ${isDead ? 'bg-red-950/20 border-red-900' : 'bg-zinc-950/80 border-emerald-800'}`}>
             <div className={`flex justify-between items-center border-b pb-2 ${isDead ? 'border-red-900/50' : 'border-emerald-900/50'}`}>
+                <div className="flex flex-col items-center mr-2 gap-0.5 bg-emerald-950/30 p-1">
+                    <button onClick={onMoveUp} disabled={isFirst} className={`p-0.5 rounded transition-colors ${isFirst ? 'opacity-30 cursor-not-allowed text-emerald-900' : 'text-emerald-600 hover:bg-emerald-800 hover:text-emerald-300'}`}>
+                        <ChevronUp size={16} />
+                    </button>
+                    <button onClick={onMoveDown} disabled={isLast} className={`p-0.5 rounded transition-colors ${isLast ? 'opacity-30 cursor-not-allowed text-emerald-900' : 'text-emerald-600 hover:bg-emerald-800 hover:text-emerald-300'}`}>
+                        <ChevronDown size={16} />
+                    </button>
+                </div>
                 <input
                     type="text"
                     value={character.name || "NOME INDISPONÍVEL"}
@@ -392,7 +572,7 @@ function StatMini({ label, value, isSave }: { label: string, value: number, isSa
 //
 // MÓDULO DE INSPEÇÃO (MODAL DO DIRETOR)
 //
-function PlayerModal({ character, onClose, onUpdate }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: any) => void }) {
+function PlayerModal({ character, onClose, onUpdate }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: string | number | boolean) => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     return (

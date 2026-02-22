@@ -62,11 +62,21 @@ export interface EnvironmentState {
     radiation: string; // e.g. "Seguro", "Letal"
 }
 
-// Room represents the collection of players in a specific Warden session
+export interface EncounterState {
+    isActive: boolean;
+    status: 'rolling' | 'active'; // 'rolling' means waiting for inputs, 'active' means combat is running
+    initiatives: Record<string, number>; // playerId -> initiative
+    turnOrder: string[]; // ordered list of playerIds
+    currentTurnIndex: number;
+    round: number;
+}
+
 export interface RoomData {
     isLocked?: boolean;
     environment?: EnvironmentState;
+    encounter?: EncounterState;
     players: Record<string, CharacterSheet>;
+    playerOrder?: string[];
     logs: Record<string, RollLog>;
 }
 

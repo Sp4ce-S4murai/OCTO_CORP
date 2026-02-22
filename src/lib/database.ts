@@ -1,6 +1,6 @@
-import { ref, onValue, set, update, push, remove, get } from "firebase/database";
+import { ref, onValue, set, update, push, remove } from "firebase/database";
 import { database } from "./firebase";
-import { CharacterSheet, RollLog, RoomData } from "../types/character";
+import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState } from "../types/character";
 
 // Helper to get relative path for a room
 const roomPath = (roomId: string) => `rooms/${roomId}`;
@@ -30,7 +30,7 @@ export const subscribeToPlayer = (
 };
 
 // Actions
-export const updateEnvironment = async (roomId: string, envData: any) => {
+export const updateEnvironment = async (roomId: string, envData: Partial<EnvironmentState>) => {
     const ePath = ref(database, `${roomPath(roomId)}/environment`);
     await set(ePath, envData);
 };
@@ -41,9 +41,14 @@ export const updatePlayer = async (roomId: string, playerId: string, partialData
 };
 
 // Advanced: update nested property (e.g. vitals.stress.current)
-export const updatePlayerNested = async (roomId: string, playerId: string, path: string, value: any) => {
+export const updatePlayerNested = async (roomId: string, playerId: string, path: string, value: string | number | boolean) => {
     const pPath = ref(database, playerPath(roomId, playerId));
     await update(pPath, { [path]: value });
+};
+
+export const updatePlayerOrder = async (roomId: string, order: string[]) => {
+    const orderPath = ref(database, `${roomPath(roomId)}/playerOrder`);
+    await set(orderPath, order);
 };
 
 export const createPlayer = async (roomId: string, character: CharacterSheet) => {
@@ -60,6 +65,53 @@ export const pushLog = async (roomId: string, log: Omit<RollLog, 'id'>) => {
     const lPath = ref(database, logsPath(roomId));
     const newLogRef = push(lPath);
     await set(newLogRef, { ...log, id: newLogRef.key });
+};
+
+// --- ENCOUNTER SYSTEM ---
+
+export const startEncounter = async (roomId: string, playerIds: string[]) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const initialEncounter: EncounterState = {
+        isActive: true,
+        status: 'rolling',
+        initiatives: {},
+        turnOrder: [],
+        currentTurnIndex: 0,
+        round: 1
+    };
+    await set(encPath, initialEncounter);
+};
+
+export const submitInitiative = async (roomId: string, playerId: string, value: number) => {
+    const initPath = ref(database, `${roomPath(roomId)}/encounter/initiatives/${playerId}`);
+    await set(initPath, value);
+};
+
+export const beginTurns = async (roomId: string, sortedPlayerIds: string[]) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    await update(encPath, {
+        status: 'active',
+        turnOrder: sortedPlayerIds,
+        currentTurnIndex: 0,
+        round: 1
+    });
+};
+
+export const nextTurn = async (roomId: string, encounter: EncounterState) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const nextIndex = encounter.currentTurnIndex + 1;
+
+    if (nextIndex >= encounter.turnOrder.length) {
+        // Loop back to start, increment round
+        await update(encPath, { currentTurnIndex: 0, round: encounter.round + 1 });
+    } else {
+        await update(encPath, { currentTurnIndex: nextIndex });
+    }
+};
+
+export const endEncounter = async (roomId: string) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    await remove(encPath);
 };
 
 // Initial template for a blank character
