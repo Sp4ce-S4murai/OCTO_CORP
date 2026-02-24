@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { pushLog, updatePlayerNested } from "@/lib/database";
 import { CharacterSheet, RollLog } from "@/types/character";
+import { PanicIcon } from "./PanicIcon";
 
 interface Props {
     roomId: string;
@@ -67,11 +68,13 @@ export function DiceCalculator({ roomId, character }: Props) {
         // Find if there is advantage or disadvantage for this specific stat
         let hasAdvantage = false;
         let hasDisadvantage = false;
+        let mathPenalty = 0;
 
         activeConsequences.forEach(c => {
             if (c.target_stat === 'all' || c.target_stat === stat || c.target_stat === category) {
                 if (c.modifier_type === 'advantage') hasAdvantage = true;
                 if (c.modifier_type === 'disadvantage') hasDisadvantage = true;
+                if (c.modifier_type === 'math_sub' && c.modifier_value) mathPenalty += c.modifier_value;
             }
         });
 
@@ -121,7 +124,7 @@ export function DiceCalculator({ roomId, character }: Props) {
         const isAutoFail = rawRoll >= 90 && rawRoll <= 99;
 
         const modifierValue = getSkillBonus(selectedSkillName);
-        const targetValue = statValue + modifierValue;
+        const targetValue = statValue + modifierValue - mathPenalty;
 
         let resolveResult: RollLog['result'] = 'Failure';
 
@@ -219,8 +222,8 @@ export function DiceCalculator({ roomId, character }: Props) {
     if (panicMode) {
         return (
             <div className="bg-amber-950 border-2 border-amber-600 p-4 shadow-xl shadow-amber-900/50 animate-pulse">
-                <h3 className="text-amber-500 font-bold mb-2 uppercase text-xl border-b border-amber-600 pb-2">
-                    ⚠️ ALERTA DE PÂNICO DETECTADO
+                <h3 className="text-amber-500 font-bold mb-2 uppercase text-xl border-b border-amber-600 pb-2 flex items-center gap-2">
+                    <PanicIcon size={24} strokeWidth={2.5} /> ALERTA DE PÂNICO DETECTADO
                 </h3>
                 <p className="text-amber-200 text-sm mb-4">
                     O sistema nervoso central excedeu o limite seguro. Teste contra <span className="font-bold">Stress Atual ({character.vitals.stress.current})</span> rolando 1d20.

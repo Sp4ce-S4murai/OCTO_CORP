@@ -94,7 +94,16 @@ export const updatePlayer = async (roomId: string, playerId: string, partialData
     await update(pPath, partialData);
 };
 
-// Advanced: update nested property (e.g. vitals.stress.current)
+export const setActivePanicTest = async (roomId: string, panicData: any) => {
+    const pPath = ref(database, `${roomPath(roomId)}/activePanicTest`);
+    await set(pPath, panicData);
+};
+
+export const clearActivePanicTest = async (roomId: string) => {
+    const pPath = ref(database, `${roomPath(roomId)}/activePanicTest`);
+    await remove(pPath);
+};
+
 export const updatePlayerNested = async (roomId: string, playerId: string, path: string, value: string | number | boolean) => {
     const pPath = ref(database, playerPath(roomId, playerId));
     await update(pPath, { [path]: value });

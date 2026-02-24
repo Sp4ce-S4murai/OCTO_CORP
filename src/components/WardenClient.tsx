@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest } from "@/lib/database";
 import { database } from "@/lib/firebase";
 import { ref, set } from "firebase/database";
 import { RoomData, CharacterSheet } from "@/types/character";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square } from "lucide-react";
+import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
+import { PanicIcon } from "./PanicIcon";
 
 const getTimestamp = () => Date.now();
 
@@ -17,6 +19,16 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const [loading, setLoading] = useState(true);
     const [wardenMessage, setWardenMessage] = useState("");
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+
+    // Custom Condition Form State for Panic Modal
+    const [customCondition, setCustomCondition] = useState({
+        show: false,
+        name: "",
+        stat: "all",
+        modifier: "disadvantage",
+        value: 0,
+        isFatal: false
+    });
 
     const getCurrentOrder = () => {
         if (!roomData?.players) return [];
@@ -321,6 +333,141 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         });
     };
 
+    const handleApplyPanicOracle = () => {
+        const test = roomData?.activePanicTest;
+        if (!test || !test.playerId) return;
+
+        const char = roomData.players[test.playerId];
+        if (!char) return;
+
+        const oracleResult = generatePanicResult({
+            stress: test.stress || 20,
+            panicStat: char.saves.sanity || 0,
+            context: "Determinação do Diretor (Oráculo)",
+            rolledD20: test.rolledD20 || 1
+        });
+
+        const newConsequences = [...(char.consequences || []), ...oracleResult.mechanics.consequences_payload];
+        const newStress = Math.min(20, (char.vitals.stress.current || 0) + 1);
+        const hasFatal = oracleResult.mechanics.consequences_payload.some(c => c.is_fatal);
+
+        if (hasFatal) {
+            updatePlayer(roomId, test.playerId, {
+                consequences: newConsequences,
+                "vitals/health/current": 0,
+                "vitals/wounds/current": char.vitals.wounds.max || 1,
+                "vitals/stress/current": newStress
+            } as any);
+        } else {
+            updatePlayer(roomId, test.playerId, {
+                consequences: newConsequences,
+                "vitals/stress/current": newStress
+            } as any);
+        }
+
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "COMPUTADOR MOTHERSHIP",
+            playerId: "sys",
+            statName: `CONDIÇÃO DE PÂNICO: ${oracleResult.mechanics.effect_name}`,
+            statValue: oracleResult.mechanics.entropy_score || 0,
+            roll: test.rolledD20 || 0,
+            result: 'Tabela de Pânico'
+        });
+
+        // clearActivePanicTest(roomId);
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, update }) => {
+                update(ref(database, `rooms/${roomId}/activePanicTest`), {
+                    status: 'resolved',
+                    resultText: oracleResult.mechanics.effect_name,
+                    resultDescription: oracleResult.mechanics.consequences_payload[0]?.ui_description || "O Oráculo interveio."
+                });
+            });
+        });
+
+        setCustomCondition(prev => ({ ...prev, show: false }));
+    };
+
+    const handleApplyCustomCondition = () => {
+        const test = roomData?.activePanicTest;
+        if (!test || !test.playerId) return;
+
+        const char = roomData.players[test.playerId];
+        if (!char) return;
+
+        if (!customCondition.name) return alert("Insira um nome para a condição.");
+
+        const newSequence = {
+            id: crypto.randomUUID(),
+            name: customCondition.name,
+            type: customCondition.isFatal ? "damage" : "debuff",
+            target_stat: customCondition.stat,
+            modifier_type: customCondition.modifier,
+            modifier_value: customCondition.value || null,
+            duration_type: "permanent",
+            duration_value: null,
+            ui_description: "Inserção Manual do Diretor.",
+            is_fatal: customCondition.isFatal
+        };
+
+        const newConsequences = [...(char.consequences || []), newSequence as any];
+        const newStress = Math.min(20, (char.vitals.stress.current || 0) + 1);
+
+        if (customCondition.isFatal) {
+            updatePlayer(roomId, test.playerId, {
+                consequences: newConsequences,
+                "vitals/health/current": 0,
+                "vitals/wounds/current": char.vitals.wounds.max || 1,
+                "vitals/stress/current": newStress
+            } as any);
+        } else {
+            updatePlayer(roomId, test.playerId, {
+                consequences: newConsequences,
+                "vitals/stress/current": newStress
+            } as any);
+        }
+
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA MOTHERSHIP",
+            playerId: "sys",
+            statName: `CONDIÇÃO DE PÂNICO APLICADA: ${char.name} > ${customCondition.name}`,
+            statValue: 0,
+            roll: test.rolledD20 || 0,
+            result: 'Tabela de Pânico'
+        });
+
+        // clearActivePanicTest(roomId);
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, update }) => {
+                update(ref(database, `rooms/${roomId}/activePanicTest`), {
+                    status: 'resolved',
+                    resultText: customCondition.name,
+                    resultDescription: customCondition.isFatal ? "CONDIÇÃO FATAL APLICADA." : `Penalidade/Modificador: ${customCondition.modifier.toUpperCase()}`
+                });
+            });
+        });
+
+        setCustomCondition({ show: false, name: "", stat: "all", modifier: "disadvantage", value: 0, isFatal: false });
+    };
+
+    const handleDismissPanicTest = () => {
+        if (!roomData?.activePanicTest) return;
+
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA MOTHERSHIP",
+            playerId: "sys",
+            statName: `TESTE DE PÂNICO BEM SUCEDIDO (${roomData.activePanicTest.playerName})`,
+            statValue: 0,
+            roll: roomData.activePanicTest.rolledD20 || 0,
+            result: 'Warden Message'
+        });
+
+        clearActivePanicTest(roomId);
+    };
+
     if (loading) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Sincronizando feed de vídeo...</div>;
     }
@@ -490,6 +637,115 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val)}
                     onTriggerPanic={() => { handleTriggerPanic(selectedPlayerId); setSelectedPlayerId(null); }}
                 />
+            )}
+
+            {/* WARDEN PANIC TEST MODAL */}
+            {roomData?.activePanicTest && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+                    <div className="bg-zinc-950 border-2 border-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.3)] max-w-lg w-full flex flex-col p-6 animate-in zoom-in-95 relative">
+                        <button
+                            onClick={() => clearActivePanicTest(roomId)}
+                            className="absolute top-4 right-4 text-amber-500/50 hover:text-amber-500 transition-colors"
+                        >
+                            <X size={24} />
+                        </button>
+
+                        <div className="flex items-center gap-3 border-b border-amber-500/30 pb-4 mb-6">
+                            <PanicIcon className="text-amber-500 animate-pulse" size={40} strokeWidth={2.5} />
+                            <div>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-amber-500">TESTE DE PÂNICO ATIVO</h2>
+                                <p className="text-sm text-amber-500/70 font-mono">ALVO: {roomData.activePanicTest.playerName || 'DESCONHECIDO'}</p>
+                            </div>
+                        </div>
+
+                        {roomData.activePanicTest.status === 'waiting' && (
+                            <div className="text-center py-8">
+                                <p className="text-amber-300 animate-pulse text-lg tracking-widest uppercase">Aguardando inserção de dados pelo jogador...</p>
+                            </div>
+                        )}
+
+                        {roomData.activePanicTest.status === 'rolled' && roomData.activePanicTest.is_panic === false && (
+                            <div className="text-center flex flex-col items-center gap-6">
+                                <div className="text-4xl font-bold text-emerald-500 bg-emerald-950/30 border border-emerald-500/50 w-full py-4 tracking-widest">
+                                    [ SUCESSO ]
+                                </div>
+                                <div className="text-2xl font-mono text-emerald-400">Resultado: {roomData.activePanicTest.rolledD20} <span className="text-sm text-gray-400">&gt;</span> <span className="text-lg text-amber-400">Estresse {roomData.activePanicTest.stress}</span></div>
+                                <button onClick={handleDismissPanicTest} className="w-full bg-emerald-900 border border-emerald-500 hover:bg-emerald-800 text-emerald-100 font-bold uppercase py-4 transition-colors">
+                                    LIBERAR JOGADOR (OK)
+                                </button>
+                            </div>
+                        )}
+
+                        {roomData.activePanicTest.status === 'rolled' && roomData.activePanicTest.is_panic === true && (
+                            <div className="flex flex-col items-center gap-6">
+                                <div className="text-4xl font-bold text-red-500 bg-red-950/30 border border-red-500/50 w-full py-4 text-center tracking-widest">
+                                    [ FALHA - PÂNICO ]
+                                </div>
+                                <div className="text-xl font-mono text-red-400">Resultado: {roomData.activePanicTest.rolledD20} <span className="text-sm text-gray-400">&lt;=</span> <span className="text-lg text-amber-400">Estresse {roomData.activePanicTest.stress}</span></div>
+
+                                {!customCondition.show ? (
+                                    <div className="w-full flex justify-between gap-4 mt-4">
+                                        <button onClick={handleApplyPanicOracle} className="flex-1 bg-red-950 border border-red-500 hover:bg-red-900 text-red-400 font-bold uppercase py-4 transition-colors flex flex-col items-center gap-1">
+                                            <span>USAR ORÁCULO</span>
+                                            <span className="text-[10px] text-red-500/70 font-mono">(Tabela Automática)</span>
+                                        </button>
+                                        <button onClick={() => setCustomCondition(prev => ({ ...prev, show: true }))} className="flex-1 bg-amber-950 border border-amber-500 hover:bg-amber-900 text-amber-400 font-bold uppercase py-4 transition-colors flex flex-col items-center gap-1">
+                                            <span>INSERIR CONDIÇÃO</span>
+                                            <span className="text-[10px] text-amber-500/70 font-mono">(Manual)</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full border border-amber-500/50 p-4 bg-zinc-900/80">
+                                        <h3 className="text-amber-500 font-bold uppercase tracking-widest text-sm mb-4 border-b border-amber-900/50 pb-2 flex justify-between">
+                                            <span>Condição Manual</span>
+                                            <button onClick={() => setCustomCondition(prev => ({ ...prev, show: false }))} className="text-amber-700 hover:text-amber-400"><X size={16} /></button>
+                                        </h3>
+                                        <div className="flex flex-col gap-3">
+                                            <input type="text" placeholder="Nome da Condição..." className="bg-zinc-950 border border-amber-900/50 text-amber-300 p-2 font-mono outline-none focus:border-amber-500" value={customCondition.name} onChange={e => setCustomCondition(prev => ({ ...prev, name: e.target.value }))} />
+
+                                            <div className="flex gap-2">
+                                                <select className="flex-1 bg-zinc-950 border border-amber-900/50 text-amber-300 p-2 text-xs font-mono outline-none" value={customCondition.stat} onChange={e => setCustomCondition(prev => ({ ...prev, stat: e.target.value }))}>
+                                                    <option value="all">TODOS ATRIBUTOS/SAVES</option>
+                                                    <option value="strength">FORÇA</option>
+                                                    <option value="speed">RAPIDEZ</option>
+                                                    <option value="intellect">INTELECTO</option>
+                                                    <option value="combat">COMBATE</option>
+                                                    <option value="sanity">SANIDADE</option>
+                                                    <option value="fear">MEDO</option>
+                                                    <option value="body">CORPO</option>
+                                                </select>
+                                                <select className="flex-1 bg-zinc-950 border border-amber-900/50 text-amber-300 p-2 text-xs font-mono outline-none" value={customCondition.modifier} onChange={e => setCustomCondition(prev => ({ ...prev, modifier: e.target.value }))}>
+                                                    <option value="disadvantage">DESVANTAGEM</option>
+                                                    <option value="advantage">VANTAGEM</option>
+                                                    <option value="math_sub">PENALIDADE (-)</option>
+                                                </select>
+                                            </div>
+
+                                            {customCondition.modifier === 'math_sub' && (
+                                                <input
+                                                    type="number"
+                                                    placeholder="Valor da Penalidade (ex: 5)"
+                                                    className="bg-zinc-950 border border-amber-900/50 text-amber-300 p-2 font-mono outline-none focus:border-amber-500 w-full"
+                                                    value={customCondition.value || ''}
+                                                    onChange={e => setCustomCondition(prev => ({ ...prev, value: Number(e.target.value) }))}
+                                                />
+                                            )}
+
+                                            <label className="flex items-center gap-2 mt-2 cursor-pointer border border-red-900/30 bg-red-950/10 p-2">
+                                                <input type="checkbox" checked={customCondition.isFatal} onChange={e => setCustomCondition(prev => ({ ...prev, isFatal: e.target.checked }))} className="accent-red-500" />
+                                                <span className="text-red-500 text-xs font-bold tracking-widest uppercase">CONDIÇÃO FATAL (MATA INSTANTANEAMENTE)</span>
+                                            </label>
+
+                                            <button onClick={handleApplyCustomCondition} className="w-full bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold uppercase tracking-widest p-3 mt-4 transition-colors">
+                                                APLICAR CONDIÇÃO
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </main>
     );

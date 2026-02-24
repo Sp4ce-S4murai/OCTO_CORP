@@ -89,6 +89,14 @@ export interface RoomData {
     isLocked?: boolean;
     environment?: EnvironmentState;
     encounter?: EncounterState;
+    activePanicTest?: {
+        playerId: string;
+        playerName: string;
+        status: 'waiting' | 'rolled';
+        rolledD20?: number;
+        stress?: number;
+        is_panic?: boolean;
+    } | null;
     players: Record<string, CharacterSheet>;
     playerOrder?: string[];
     logs: Record<string, RollLog>;

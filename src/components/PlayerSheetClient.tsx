@@ -3,13 +3,14 @@
 import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, addTerminalLog } from "@/lib/database";
 import { CharacterSheet, EncounterState } from "@/types/character";
-import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight } from "lucide-react";
+import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
 import { SkillTreeSelector } from "./SkillTreeSelector";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 import { EnvironmentPanel } from "./EnvironmentPanel";
+import { PanicIcon } from "./PanicIcon";
 import { EnvironmentState } from "@/types/character";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
 
@@ -24,7 +25,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     const [showPanicModal, setShowPanicModal] = useState(false);
     const [manualPanicInput, setManualPanicInput] = useState("");
-    const [panicOracleResult, setPanicOracleResult] = useState<PanicOracleOutput | null>(null);
+    const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
 
     // Track other players in the room
@@ -78,6 +79,17 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                 onValue(ref(database, `rooms/${roomId}/encounter`), (snap) => {
                     setEncounter(snap.val());
+                });
+
+                onValue(ref(database, `rooms/${roomId}/activePanicTest`), (snap) => {
+                    const data = snap.val();
+                    setActivePanicTest(data);
+
+                    if (data && data.playerId === playerId && data.status === 'waiting') {
+                        setShowPanicModal(true);
+                    } else {
+                        setShowPanicModal(false);
+                    }
                 });
             });
         });
@@ -160,7 +172,15 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 const hitAgainAtMax = currentStress >= 20 && prevStress >= 20 && currentStress !== prevStress;
 
                 if (crossedThreshold || hitAgainAtMax) {
-                    setShowPanicModal(true);
+                    import("@/lib/firebase").then(({ database }) => {
+                        import("firebase/database").then(({ ref, set }) => {
+                            set(ref(database, `rooms/${roomId}/activePanicTest`), {
+                                playerId,
+                                playerName: character.name,
+                                status: 'waiting'
+                            });
+                        });
+                    });
                 }
             }
             prevStressRef.current = currentStress;
@@ -286,6 +306,33 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         return 'avatar-filter-normal';
     };
 
+    // --- CALCULATE CONDITION PENALTIES ---
+    const getStatPenalty = (statName: string) => {
+        if (!character?.consequences) return 0;
+        let penalty = 0;
+        character.consequences.forEach(c => {
+            if (c.target_stat === statName || c.target_stat === 'all') {
+                if (c.modifier_type === 'math_sub' && c.modifier_value) {
+                    penalty += c.modifier_value;
+                }
+            }
+        });
+        return penalty;
+    };
+
+    const getSavePenalty = (saveName: string) => {
+        if (!character?.consequences) return 0;
+        let penalty = 0;
+        character.consequences.forEach(c => {
+            if (c.target_stat === saveName || c.target_stat === 'all') {
+                if (c.modifier_type === 'math_sub' && c.modifier_value) {
+                    penalty += c.modifier_value;
+                }
+            }
+        });
+        return penalty;
+    };
+
     // Global Theme Override based on Combat Turn
     const activeBorderTheme = isMyTurn ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : (isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80');
 
@@ -299,62 +346,27 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         }
 
         const currentStress = character?.vitals.stress.current || 20;
+        const isPanicCheck = rolledD20 <= currentStress;
 
-        // Call the Panic Oracle with the specific D20
-        const oracleResult = generatePanicResult({
-            stress: currentStress,
-            panicStat: character?.saves.sanity || 0,
-            context: "Stress atingiu Nível Crítico",
-            rolledD20
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, update, set }) => {
+                const panicRef = ref(database, `rooms/${roomId}/activePanicTest`);
+
+                // Usando 'set' em vez de 'update' para garantir que os campos playerId e playerName também existam,
+                // caso o diretor tenha forçado a ativação (Warden Panic).
+                set(panicRef, {
+                    playerId,
+                    playerName: character?.name || "Desconhecido",
+                    status: 'rolled',
+                    rolledD20,
+                    stress: currentStress,
+                    is_panic: isPanicCheck
+                });
+            });
         });
 
-        setPanicOracleResult(oracleResult);
         setShowPanicModal(false);
         setManualPanicInput("");
-
-        addTerminalLog(roomId, {
-            timestamp: Date.now(),
-            playerName: character?.name || "Desconhecido",
-            playerId: playerId,
-            statName: "SISTEMA NEURO-SINTÉTICO: TENTATIVA DE ESTABILIZAÇÃO",
-            statValue: currentStress,
-            roll: rolledD20,
-            result: oracleResult.mechanics.is_panic ? "Panic Fail" : "Panic Success"
-        });
-
-        // Apply consequences if it failed
-        if (oracleResult.mechanics.is_panic) {
-            const newConsequences = [...(character?.consequences || []), ...oracleResult.mechanics.consequences_payload];
-
-            // +1 Stress on failure (capped at 20)
-            const newStress = Math.min(20, (character?.vitals.stress.current || 0) + 1);
-
-            // Check for Auto-Kill
-            const hasFatal = oracleResult.mechanics.consequences_payload.some(c => c.is_fatal);
-            if (hasFatal) {
-                updatePlayer(roomId, playerId, {
-                    consequences: newConsequences,
-                    "vitals/health/current": 0,
-                    "vitals/wounds/current": character?.vitals.wounds.max || 1,
-                    "vitals/stress/current": newStress
-                } as any);
-            } else {
-                updatePlayer(roomId, playerId, {
-                    consequences: newConsequences,
-                    "vitals/stress/current": newStress
-                } as any);
-            }
-
-            addTerminalLog(roomId, {
-                timestamp: Date.now() + 1,
-                playerName: "COMPUTADOR MOTHERSHIP",
-                playerId: "sys",
-                statName: `CONDIÇÃO: ${oracleResult.mechanics.effect_name}`,
-                statValue: oracleResult.mechanics.entropy_score || 0,
-                roll: 0,
-                result: 'Tabela de Pânico'
-            });
-        }
     };
 
     return (
@@ -362,13 +374,24 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             <main className={`flex-1 w-full min-w-0 border-2 ${activeBorderTheme} p-6 rounded-sm shadow-2xl relative overflow-hidden transition-all duration-500`}>
 
                 {/* PANIC MODAL: INPUT D20 */}
-                {!isDead && showPanicModal && !panicOracleResult && (
+                {!isDead && showPanicModal && (
                     <div className="absolute inset-0 bg-red-950/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                        <div className="bg-zinc-950 border-2 border-red-500 p-8 flex flex-col items-center gap-6 max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.3)] text-center">
-                            <AlertTriangle size={48} className="text-red-500 animate-pulse" />
+                        <div className="bg-zinc-950 border-2 border-red-500 p-8 flex flex-col items-center gap-6 max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.3)] text-center relative">
+                            {/* CLOSE BUTTON (FECHAR TELA FORCADO) */}
+                            <button
+                                onClick={() => {
+                                    setShowPanicModal(false);
+                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                }}
+                                className="absolute top-4 right-4 text-red-500/50 hover:text-red-500 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+
+                            <PanicIcon size={64} className="text-red-500 animate-pulse" strokeWidth={2.5} />
                             <div>
                                 <h2 className="text-2xl font-bold uppercase tracking-widest text-red-500">Teste de Pânico</h2>
-                                <p className="text-red-200/70 text-sm mt-2">O estresse de {character.name} atingiu níveis críticos! Tente rolar um D20 <span className="font-bold underline">MENOR</span> que o Stress Atual ({character.vitals.stress.current}) para manter a sanidade.</p>
+                                <p className="text-red-200/70 text-sm mt-2">O estresse de {character.name} atingiu níveis críticos! Tente rolar um D20 <span className="font-bold underline">MAIOR OU IGUAL</span> que o Stress Atual ({character.vitals.stress.current}) para manter a sanidade.</p>
                             </div>
 
                             <div className="flex flex-col w-full gap-4 mt-4">
@@ -402,33 +425,57 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                     </div>
                 )}
 
-                {/* PANIC TEST OVERLAY (ENTROPY ORACLE) */}
-                {!isDead && panicOracleResult && (
+                {/* WAITING FOR WARDEN OVERLAY */}
+                {!isDead && activePanicTest?.playerId === playerId && activePanicTest?.status === 'rolled' && (
                     <div className="absolute inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
-                        <div
-                            className="p-8 flex flex-col items-center justify-center gap-6 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300"
-                            style={{
-                                backgroundColor: panicOracleResult.ui_action.theme.background_color,
-                                border: panicOracleResult.ui_action.theme.border,
-                                color: panicOracleResult.ui_action.theme.text_color,
-                                boxShadow: `0 0 50px ${panicOracleResult.ui_action.theme.border.split(' ')[2]}`
-                            }}
-                        >
-                            <AlertTriangle size={64} className="animate-pulse" style={{ color: panicOracleResult.ui_action.theme.text_color }} />
+                        <div className="p-8 flex flex-col items-center justify-center gap-6 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border-2 border-amber-500 bg-amber-950/20 relative">
+                            <button
+                                onClick={() => {
+                                    setShowPanicModal(false);
+                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                }}
+                                className="absolute top-4 right-4 text-amber-500/50 hover:text-amber-500 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+
+                            <PanicIcon size={80} className="animate-pulse text-amber-500" strokeWidth={2.5} />
                             <div>
-                                <h2 className="text-2xl font-bold uppercase tracking-widest">{panicOracleResult.ui_action.popup_content.title}</h2>
-                                <p className="opacity-80 text-sm mt-2 font-mono uppercase">LOG: {panicOracleResult.ui_action.popup_content.event_log}</p>
+                                <h2 className="text-2xl font-bold uppercase tracking-widest text-amber-500">RELATÓRIO DE SÍNTESE ENVIADO</h2>
+                                <p className="opacity-80 text-sm mt-2 font-mono uppercase text-amber-200">Aguardando Avaliação do Diretor de Protocolo MOTHERSHIP.</p>
                             </div>
 
-                            <div className="bg-black/50 p-6 border border-white/20 text-left w-full my-4">
-                                <p className="font-serif italic text-lg leading-relaxed">{panicOracleResult.ui_action.popup_content.player_read_text}</p>
+                            <div className="bg-black/50 p-6 border border-amber-500/20 text-center w-full my-4">
+                                <p className="font-serif italic text-lg leading-relaxed text-amber-100">Resultado = {activePanicTest.rolledD20}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* RESOLVED PANIC TEST OVERLAY */}
+                {!isDead && activePanicTest?.playerId === playerId && activePanicTest?.status === 'resolved' && (
+                    <div className="absolute inset-0 bg-red-950/90 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+                        <div className="bg-zinc-950 border-2 border-red-500 p-8 flex flex-col items-center gap-6 max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.3)] text-center relative">
+                            <PanicIcon size={64} className="text-red-500" strokeWidth={2.5} />
+                            <div>
+                                <h2 className="text-2xl font-bold uppercase tracking-widest text-red-500">TRAUMA ADQUIRIDO</h2>
+                                <p className="text-red-200/70 text-sm mt-2 font-mono uppercase">O Diretor de Protocolo avaliou seu colapso.</p>
+                            </div>
+
+                            <div className="bg-red-900/20 border border-red-500/30 p-4 w-full my-2">
+                                {/* @ts-ignore */}
+                                <h3 className="text-lg font-bold text-red-400 mb-2 uppercase">{activePanicTest?.resultText || "Condição Desconhecida"}</h3>
+                                {/* @ts-ignore */}
+                                <p className="text-sm text-red-200">{activePanicTest?.resultDescription || ""}</p>
                             </div>
 
                             <button
-                                onClick={() => setPanicOracleResult(null)}
-                                className="w-full bg-black/40 hover:bg-black/80 font-bold uppercase tracking-widest py-4 transition-colors border border-white/30"
+                                onClick={() => {
+                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                }}
+                                className="w-full bg-red-800 hover:bg-red-700 text-white font-bold uppercase tracking-widest py-4 transition-colors"
                             >
-                                DIRECIONAR FOCO VITAL (Ciente)
+                                Aceitar Condição
                             </button>
                         </div>
                     </div>
@@ -610,18 +657,18 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     <CollapsibleSection title="ATRIBUTOS">
                         <div className="grid grid-cols-2 gap-4">
-                            <StatBox label="FORÇA" value={character.stats.strength} baseValue={character.baseStats.strength} path="baseStats/strength" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
-                            <StatBox label="RAPIDEZ" value={character.stats.speed} baseValue={character.baseStats.speed} path="baseStats/speed" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
-                            <StatBox label="INTELECTO" value={character.stats.intellect} baseValue={character.baseStats.intellect} path="baseStats/intellect" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
-                            <StatBox label="COMBATE" value={character.stats.combat} baseValue={character.baseStats.combat} path="baseStats/combat" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="FORÇA" value={character.stats.strength} penalty={getStatPenalty('strength')} baseValue={character.baseStats.strength} path="baseStats/strength" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="RAPIDEZ" value={character.stats.speed} penalty={getStatPenalty('speed')} baseValue={character.baseStats.speed} path="baseStats/speed" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="INTELECTO" value={character.stats.intellect} penalty={getStatPenalty('intellect')} baseValue={character.baseStats.intellect} path="baseStats/intellect" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="COMBATE" value={character.stats.combat} penalty={getStatPenalty('combat')} baseValue={character.baseStats.combat} path="baseStats/combat" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                         </div>
                     </CollapsibleSection>
 
                     <CollapsibleSection title="RESISTÊNCIAS">
                         <div className="grid grid-cols-1 gap-4">
-                            <StatBox label="SANIDADE" value={character.saves.sanity} baseValue={character.baseSaves.sanity} path="baseSaves/sanity" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
-                            <StatBox label="MEDO" value={character.saves.fear} baseValue={character.baseSaves.fear} path="baseSaves/fear" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
-                            <StatBox label="CORPO" value={character.saves.body} baseValue={character.baseSaves.body} path="baseSaves/body" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="SANIDADE" value={character.saves.sanity} penalty={getSavePenalty('sanity')} baseValue={character.baseSaves.sanity} path="baseSaves/sanity" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="MEDO" value={character.saves.fear} penalty={getSavePenalty('fear')} baseValue={character.baseSaves.fear} path="baseSaves/fear" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                            <StatBox label="CORPO" value={character.saves.body} penalty={getSavePenalty('body')} baseValue={character.baseSaves.body} path="baseSaves/body" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                         </div>
                     </CollapsibleSection>
                 </section>
@@ -739,11 +786,14 @@ function InputGroup({ label, value, onChange, disabled }: { label: string; value
     );
 }
 
-function StatBox({ label, value, baseValue, path, onUpdate, disabled }: { label: string; value: number; baseValue: number; path: string; onUpdate: (p: string, v: number) => void; disabled?: boolean }) {
+function StatBox({ label, value, baseValue, path, onUpdate, disabled, penalty = 0 }: { label: string; value: number; baseValue: number; path: string; onUpdate: (p: string, v: number) => void; disabled?: boolean; penalty?: number }) {
     const isModified = value !== baseValue;
     const [isComponentLocked, setIsComponentLocked] = useState(true);
 
     const isLocked = isComponentLocked || disabled;
+
+    // Calcula o valor final visivel para mostrar de forma transparente
+    const displayValue = value - penalty;
 
     return (
         <div className="bg-zinc-900/50 border border-emerald-900/50 p-2 flex flex-col group hover:border-emerald-500 transition-colors relative">
@@ -768,8 +818,11 @@ function StatBox({ label, value, baseValue, path, onUpdate, disabled }: { label:
                 </div>
                 <div className="flex flex-col items-end">
                     <span className="text-[10px] text-emerald-700/50 uppercase leading-none mb-1">Total</span>
-                    <div className={`text-2xl font-bold pr-2 ${isModified ? 'text-emerald-300' : 'text-emerald-500'}`} title="Resultado Modificado pela Classe">
-                        {value || 0}
+                    <div className="flex items-center gap-1">
+                        {penalty > 0 && <span className="text-red-500 font-bold text-sm" title="Penalidade de Condição">-{penalty}</span>}
+                        <div className={`text-2xl font-bold pr-2 ${penalty > 0 ? 'text-red-400' : (isModified ? 'text-emerald-300' : 'text-emerald-500')}`} title="Resultado Modificado pela Classe e Condições">
+                            {displayValue}
+                        </div>
                     </div>
                 </div>
             </div>
