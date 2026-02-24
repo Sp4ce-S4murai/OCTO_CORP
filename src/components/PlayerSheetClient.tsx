@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, addTerminalLog } from "@/lib/database";
+import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog } from "@/lib/database";
 import { CharacterSheet, EncounterState } from "@/types/character";
 import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X } from "lucide-react";
 import { DiceCalculator } from "./DiceCalculator";
@@ -172,14 +172,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 const hitAgainAtMax = currentStress >= 20 && prevStress >= 20 && currentStress !== prevStress;
 
                 if (crossedThreshold || hitAgainAtMax) {
-                    import("@/lib/firebase").then(({ database }) => {
-                        import("firebase/database").then(({ ref, set }) => {
-                            set(ref(database, `rooms/${roomId}/activePanicTest`), {
-                                playerId,
-                                playerName: character.name,
-                                status: 'waiting'
-                            });
-                        });
+                    import("@/lib/database").then(({ submitPanicTestWaiting }) => {
+                        submitPanicTestWaiting(roomId, playerId, character.name);
                     });
                 }
             }
@@ -348,21 +342,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         const currentStress = character?.vitals.stress.current || 20;
         const isPanicCheck = rolledD20 <= currentStress;
 
-        import("@/lib/firebase").then(({ database }) => {
-            import("firebase/database").then(({ ref, update, set }) => {
-                const panicRef = ref(database, `rooms/${roomId}/activePanicTest`);
-
-                // Usando 'set' em vez de 'update' para garantir que os campos playerId e playerName também existam,
-                // caso o diretor tenha forçado a ativação (Warden Panic).
-                set(panicRef, {
-                    playerId,
-                    playerName: character?.name || "Desconhecido",
-                    status: 'rolled',
-                    rolledD20,
-                    stress: currentStress,
-                    is_panic: isPanicCheck
-                });
-            });
+        import("@/lib/database").then(({ submitPanicTestRoll }) => {
+            submitPanicTestRoll(roomId, playerId, character?.name || "Desconhecido", rolledD20, currentStress, isPanicCheck);
         });
 
         setShowPanicModal(false);
@@ -381,7 +362,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             <button
                                 onClick={() => {
                                     setShowPanicModal(false);
-                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                    import("@/lib/database").then(({ clearActivePanicTest }) => clearActivePanicTest(roomId));
                                 }}
                                 className="absolute top-4 right-4 text-red-500/50 hover:text-red-500 transition-colors"
                             >
@@ -432,7 +413,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             <button
                                 onClick={() => {
                                     setShowPanicModal(false);
-                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                    import("@/lib/database").then(({ clearActivePanicTest }) => clearActivePanicTest(roomId));
                                 }}
                                 className="absolute top-4 right-4 text-amber-500/50 hover:text-amber-500 transition-colors"
                             >
@@ -471,7 +452,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                             <button
                                 onClick={() => {
-                                    import("@/lib/firebase").then(({ database }) => { import("firebase/database").then(({ ref, remove }) => remove(ref(database, `rooms/${roomId}/activePanicTest`))) });
+                                    import("@/lib/database").then(({ clearActivePanicTest }) => clearActivePanicTest(roomId));
                                 }}
                                 className="w-full bg-red-800 hover:bg-red-700 text-white font-bold uppercase tracking-widest py-4 transition-colors"
                             >

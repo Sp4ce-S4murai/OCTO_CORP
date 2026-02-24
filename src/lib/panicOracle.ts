@@ -39,7 +39,7 @@ function rollD(faces: number): number {
 }
 
 export function generatePanicResult(input: PanicOracleInput): PanicOracleOutput {
-    const { stress, panicStat, context, rolledD20 } = input;
+    const { stress, context, rolledD20 } = input;
 
     // 1. O Teste (Julgamento do Abismo)
     // Sucesso: rolou MAIOR que o estress atual
@@ -263,12 +263,12 @@ export function generatePanicResult(input: PanicOracleInput): PanicOracleOutput 
             id: crypto.randomUUID(),
             name: effectName,
             type: "damage",
-            target_stat: "hp",
-            modifier_type: "percentage_drop",
-            modifier_value: 50,
+            target_stat: "wounds",
+            modifier_type: "math_add",
+            modifier_value: 1,
             duration_type: "instant",
             duration_value: null,
-            ui_description: "Perde 50% dos HP atuais e adquire Status 'Exausto'."
+            ui_description: "Adquire 1 Ferida instantaneamente e o Status 'Exausto'."
         }];
     } else if (entropyScore === 16) {
         effectName = "Protocolo Berserker (Surto Psicótico)";

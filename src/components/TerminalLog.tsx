@@ -63,8 +63,7 @@ export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, 
                         return (
                             <div key={log.id} className="border-l-2 pl-2 py-1 border-cyan-900/50 bg-cyan-950/10 mb-1">
                                 <span className="text-cyan-600/70 text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
-                                <span className="text-cyan-500 font-bold">TRANSMISSÃO DIRETA:</span>{' '}
-                                <span className="text-cyan-300 italic">"{log.statName}"</span>
+                                <span className="text-cyan-300 italic">&quot;{log.statName}&quot;</span>
                             </div>
                         );
                     }

@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest } from "@/lib/database";
-import { database } from "@/lib/firebase";
-import { ref, set } from "firebase/database";
-import { RoomData, CharacterSheet } from "@/types/character";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown } from "@/lib/database";
+import { RoomData, CharacterSheet, Consequence } from "@/types/character";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
@@ -258,16 +256,14 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             ui_description: conditionDesc,
             is_fatal: isFatal
         };
-
         const existingConsequences = char.consequences || [];
-        const newConsequences = [...existingConsequences, newConsequence as any];
+        const newConsequences = [...existingConsequences, newConsequence as unknown as Consequence];
 
         if (isFatal) {
             updatePlayer(roomId, char.id, {
                 consequences: newConsequences,
                 "vitals/health/current": 0,
-                "vitals/wounds/current": char.vitals.wounds.max
-            } as any);
+            } as Record<string, unknown>);
         } else {
             updatePlayer(roomId, char.id, { consequences: newConsequences });
         }
@@ -320,7 +316,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const toggleLockdown = () => {
         if (!roomData) return;
         const newLockState = !roomData.isLocked;
-        set(ref(database, `rooms/${roomId}/isLocked`), newLockState).catch(console.error);
+        setRoomLockdown(roomId, newLockState).catch(console.error);
 
         pushLog(roomId, {
             timestamp: getTimestamp(),
@@ -356,13 +352,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 consequences: newConsequences,
                 "vitals/health/current": 0,
                 "vitals/wounds/current": char.vitals.wounds.max || 1,
-                "vitals/stress/current": newStress
-            } as any);
+            } as Record<string, unknown>);
         } else {
             updatePlayer(roomId, test.playerId, {
                 consequences: newConsequences,
                 "vitals/stress/current": newStress
-            } as any);
+            } as Record<string, unknown>);
         }
 
         pushLog(roomId, {
@@ -375,15 +370,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             result: 'Tabela de Pânico'
         });
 
-        // clearActivePanicTest(roomId);
-        import("@/lib/firebase").then(({ database }) => {
-            import("firebase/database").then(({ ref, update }) => {
-                update(ref(database, `rooms/${roomId}/activePanicTest`), {
-                    status: 'resolved',
-                    resultText: oracleResult.mechanics.effect_name,
-                    resultDescription: oracleResult.mechanics.consequences_payload[0]?.ui_description || "O Oráculo interveio."
-                });
-            });
+        import("@/lib/database").then(({ submitPanicTestResolution }) => {
+            submitPanicTestResolution(roomId, oracleResult.mechanics.effect_name, oracleResult.mechanics.consequences_payload[0]?.ui_description || "O Oráculo interveio.");
         });
 
         setCustomCondition(prev => ({ ...prev, show: false }));
@@ -411,7 +399,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             is_fatal: customCondition.isFatal
         };
 
-        const newConsequences = [...(char.consequences || []), newSequence as any];
+        const newConsequences = [...(char.consequences || []), newSequence as unknown as Consequence];
         const newStress = Math.min(20, (char.vitals.stress.current || 0) + 1);
 
         if (customCondition.isFatal) {
@@ -419,13 +407,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 consequences: newConsequences,
                 "vitals/health/current": 0,
                 "vitals/wounds/current": char.vitals.wounds.max || 1,
-                "vitals/stress/current": newStress
-            } as any);
+            } as Record<string, unknown>);
         } else {
             updatePlayer(roomId, test.playerId, {
                 consequences: newConsequences,
                 "vitals/stress/current": newStress
-            } as any);
+            } as Record<string, unknown>);
         }
 
         pushLog(roomId, {
@@ -438,15 +425,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             result: 'Tabela de Pânico'
         });
 
-        // clearActivePanicTest(roomId);
-        import("@/lib/firebase").then(({ database }) => {
-            import("firebase/database").then(({ ref, update }) => {
-                update(ref(database, `rooms/${roomId}/activePanicTest`), {
-                    status: 'resolved',
-                    resultText: customCondition.name,
-                    resultDescription: customCondition.isFatal ? "CONDIÇÃO FATAL APLICADA." : `Penalidade/Modificador: ${customCondition.modifier.toUpperCase()}`
-                });
-            });
+        import("@/lib/database").then(({ submitPanicTestResolution }) => {
+            submitPanicTestResolution(roomId, customCondition.name, customCondition.isFatal ? "CONDIÇÃO FATAL APLICADA." : `Penalidade/Modificador: ${customCondition.modifier.toUpperCase()}`);
         });
 
         setCustomCondition({ show: false, name: "", stat: "all", modifier: "disadvantage", value: 0, isFatal: false });
@@ -592,7 +572,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         <MiniSheet
                             key={player.id}
                             character={player}
-                            onUpdate={(path, val) => handleUpdate(player.id, path, val)}
+                            onUpdate={(path, val) => handleUpdate(player.id, path, val as string | number | boolean)}
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
                             onAddCondition={() => handleAddCondition(player.id)}
@@ -634,7 +614,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 <PlayerModal
                     character={roomData.players[selectedPlayerId]}
                     onClose={() => setSelectedPlayerId(null)}
-                    onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val)}
+                    onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val as string | number | boolean)}
                     onTriggerPanic={() => { handleTriggerPanic(selectedPlayerId); setSelectedPlayerId(null); }}
                 />
             )}
@@ -915,8 +895,7 @@ function StatMini({ label, value, isSave }: { label: string, value: number, isSa
 
 //
 // MÓDULO DE INSPEÇÃO (MODAL DO DIRETOR)
-//
-function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: string | number | boolean | any) => void, onTriggerPanic: () => void }) {
+function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: unknown) => void, onTriggerPanic: () => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     return (
@@ -998,7 +977,7 @@ function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { charact
                                     <button
                                         onClick={() => {
                                             const newCons = character.consequences!.filter(x => x.id !== c.id);
-                                            onUpdate("consequences", newCons as any);
+                                            onUpdate("consequences", newCons as unknown as Consequence[]);
                                         }}
                                         className="text-red-500/50 hover:text-red-400 p-1 ml-2 transition-colors"
                                         title="Remover Condição"

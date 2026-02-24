@@ -89,14 +89,44 @@ export const updateEnvironment = async (roomId: string, envData: Partial<Environ
     await set(ePath, envData);
 };
 
-export const updatePlayer = async (roomId: string, playerId: string, partialData: Partial<CharacterSheet>) => {
+export const updatePlayer = async (roomId: string, playerId: string, partialData: Partial<CharacterSheet> | Record<string, unknown>) => {
     const pPath = ref(database, playerPath(roomId, playerId));
     await update(pPath, partialData);
 };
 
-export const setActivePanicTest = async (roomId: string, panicData: any) => {
-    const pPath = ref(database, `${roomPath(roomId)}/activePanicTest`);
-    await set(pPath, panicData);
+export const setRoomLockdown = async (roomId: string, isLocked: boolean) => {
+    const pPath = ref(database, `${roomPath(roomId)}/isLocked`);
+    await set(pPath, isLocked);
+};
+
+export const submitPanicTestRoll = async (roomId: string, playerId: string, playerName: string, rolledD20: number, stress: number, isPanicCheck: boolean) => {
+    const panicRef = ref(database, `${roomPath(roomId)}/activePanicTest`);
+    await set(panicRef, {
+        playerId,
+        playerName,
+        status: 'rolled',
+        rolledD20,
+        stress,
+        is_panic: isPanicCheck
+    });
+};
+
+export const submitPanicTestWaiting = async (roomId: string, playerId: string, playerName: string) => {
+    const panicRef = ref(database, `${roomPath(roomId)}/activePanicTest`);
+    await set(panicRef, {
+        playerId,
+        playerName,
+        status: 'waiting'
+    });
+};
+
+export const submitPanicTestResolution = async (roomId: string, resultText: string, resultDescription: string) => {
+    const panicRef = ref(database, `${roomPath(roomId)}/activePanicTest`);
+    await update(panicRef, {
+        status: 'resolved',
+        resultText,
+        resultDescription
+    });
 };
 
 export const clearActivePanicTest = async (roomId: string) => {
@@ -129,8 +159,6 @@ export const pushLog = async (roomId: string, log: Omit<RollLog, 'id'>) => {
     const newLogRef = push(lPath);
     await set(newLogRef, { ...log, id: newLogRef.key });
 };
-
-export const addTerminalLog = pushLog; // Alias for backward compatibility if needed
 
 // --- ENCOUNTER SYSTEM ---
 
