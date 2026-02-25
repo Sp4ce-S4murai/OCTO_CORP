@@ -99,6 +99,16 @@ export const setRoomLockdown = async (roomId: string, isLocked: boolean) => {
     await set(pPath, isLocked);
 };
 
+export const setRoomImage = async (roomId: string, base64Image: string) => {
+    const iPath = ref(database, `${roomPath(roomId)}/activeImage`);
+    await set(iPath, base64Image);
+};
+
+export const clearRoomImage = async (roomId: string) => {
+    const iPath = ref(database, `${roomPath(roomId)}/activeImage`);
+    await remove(iPath);
+};
+
 export const submitPanicTestRoll = async (roomId: string, playerId: string, playerName: string, rolledD20: number, stress: number, isPanicCheck: boolean) => {
     const panicRef = ref(database, `${roomPath(roomId)}/activePanicTest`);
     await set(panicRef, {

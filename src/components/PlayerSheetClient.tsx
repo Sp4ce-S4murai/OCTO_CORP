@@ -22,6 +22,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [encounter, setEncounter] = useState<EncounterState | undefined>(undefined);
     const [localInitiative, setLocalInitiative] = useState("");
     const [activePlayerName, setActivePlayerName] = useState<string>("");
+    const [activeImage, setActiveImage] = useState<string | null>(null);
 
     const [showPanicModal, setShowPanicModal] = useState(false);
     const [manualPanicInput, setManualPanicInput] = useState("");
@@ -29,7 +30,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
 
     // Track other players in the room
-    const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number }>>([]);
+    const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
 
     useEffect(() => {
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
@@ -65,7 +66,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                 avatarUrl: playersData[id]?.avatarUrl,
                                 hp: playersData[id]?.vitals?.health?.current || 0,
                                 maxHp: playersData[id]?.vitals?.health?.max || 10,
-                                stress: playersData[id]?.vitals?.stress?.current || 0
+                                stress: playersData[id]?.vitals?.stress?.current || 0,
+                                wounds: playersData[id]?.vitals?.wounds?.current || 0
                             }));
                         setActivePlayers(parsedPlayers);
                     } else {
@@ -79,6 +81,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                 onValue(ref(database, `rooms/${roomId}/encounter`), (snap) => {
                     setEncounter(snap.val());
+                });
+
+                onValue(ref(database, `rooms/${roomId}/activeImage`), (snap) => {
+                    setActiveImage(snap.val());
                 });
 
                 onValue(ref(database, `rooms/${roomId}/activePanicTest`), (snap) => {
@@ -352,6 +358,23 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-8 items-start relative pb-24">
+            {/* FULLSCREEN IMAGE MODAL (Diretor's Slideshow) */}
+            {activeImage && (
+                <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 duration-500">
+                    <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center justify-center animate-pulse-slow">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={activeImage}
+                            alt="Transmissão do Diretor"
+                            className="w-full h-full object-contain border-2 border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.3)] scanline-overlay"
+                        />
+                        <div className="absolute top-4 left-4 text-blue-500 bg-blue-950/80 px-4 py-2 text-xs font-bold tracking-widest uppercase border border-blue-900 flex items-center gap-2">
+                            <UploadCloud size={14} className="animate-bounce" /> TRANSMISSÃO DIRETA // MOTHERSHIP
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <main className={`flex-1 w-full min-w-0 border-2 ${activeBorderTheme} p-6 rounded-sm shadow-2xl relative overflow-hidden transition-all duration-500`}>
 
                 {/* PANIC MODAL: INPUT D20 */}
@@ -593,7 +616,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                 {/* COMPACT VITALS */}
                                 <div className="flex-1 flex flex-col gap-2 min-w-[280px]">
                                     <div className="h-4 w-full mb-1 opacity-80">
-                                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} isDead={isDead} />
+                                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} wounds={character.vitals.wounds.current} isDead={isDead} />
                                     </div>
                                     <div className="grid grid-cols-1 gap-2 border border-emerald-900/30 p-2 bg-emerald-950/10">
                                         {/* SAÚDE */}
@@ -723,7 +746,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                         </div>
                                         {/* HeartRateMonitor below */}
                                         <div className="px-0">
-                                            <HeartRateMonitor currentHp={p.hp} maxHp={p.maxHp} stress={p.stress} isDead={isDead} />
+                                            <HeartRateMonitor currentHp={p.hp} maxHp={p.maxHp} stress={p.stress} wounds={p.wounds} isDead={isDead} />
                                         </div>
                                     </div>
                                 );

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage } from "@/lib/database";
 import { RoomData, CharacterSheet, Consequence } from "@/types/character";
-import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square } from "lucide-react";
+import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
@@ -141,8 +141,90 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        const handlePaste = (e: ClipboardEvent) => {
+            // Ignore if typing in an input/textarea
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            if (e.clipboardData && e.clipboardData.items) {
+                for (let i = 0; i < e.clipboardData.items.length; i++) {
+                    if (e.clipboardData.items[i].type.indexOf("image") !== -1) {
+                        const file = e.clipboardData.items[i].getAsFile();
+                        if (file) processImageFile(file);
+                        break;
+                    }
+                }
+            }
+        };
+
+        window.addEventListener("paste", handlePaste);
+
+        return () => {
+            unsubscribe();
+            window.removeEventListener("paste", handlePaste);
+        };
     }, [roomId]);
+
+    const processImageFile = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new window.Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                // Max dimensions to avoid huge base64 strings
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const base64Data = canvas.toDataURL("image/jpeg", 0.7); // compress quality
+                    setRoomImage(roomId, base64Data);
+                    pushLog(roomId, {
+                        timestamp: getTimestamp(),
+                        playerName: "SISTEMA",
+                        playerId: "SYSTEM",
+                        statName: 'SLIDESHOW: IMAGEM ATUALIZADA',
+                        statValue: 0,
+                        roll: 0,
+                        result: 'Warden Message'
+                    });
+                }
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleClearImage = () => {
+        clearRoomImage(roomId);
+        pushLog(roomId, {
+            timestamp: getTimestamp(),
+            playerName: "SISTEMA",
+            playerId: "SYSTEM",
+            statName: 'SLIDESHOW: IMAGEM REMOVIDA',
+            statValue: 0,
+            roll: 0,
+            result: 'Warden Message'
+        });
+    };
 
     const handleUpdate = (playerId: string, path: string, value: string | number | boolean) => {
         const character = roomData?.players?.[playerId];
@@ -518,6 +600,47 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         </div>
                     </div>
 
+                    {/* IMAGE SLIDESHOW CONTROL */}
+                    <div className="md:col-span-2 border border-blue-900/50 bg-blue-950/10 p-4 mb-4 flex flex-col gap-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <h2 className="text-sm font-bold tracking-widest text-blue-500 uppercase flex items-center gap-2">
+                                <ImageIcon size={16} /> COMPARTILHAMENTO DE TELA (SLIDESHOW)
+                            </h2>
+                            <span className="text-xs text-blue-700">Pressione <kbd className="bg-blue-900 text-blue-300 px-1 rounded mx-1">Ctrl+V</kbd> em qualquer lugar fora do chat para enviar uma imagem rápida.</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label className="cursor-pointer bg-blue-950/50 hover:bg-blue-900 text-blue-400 border border-blue-800 px-4 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase text-sm">
+                                <Upload size={16} /> ESCOLHER ARQUIVO
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            processImageFile(e.target.files[0]);
+                                        }
+                                    }}
+                                />
+                            </label>
+
+                            {roomData?.activeImage && (
+                                <button
+                                    onClick={handleClearImage}
+                                    className="bg-red-950/50 hover:bg-red-900 text-red-500 border border-red-900 px-4 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase text-sm"
+                                >
+                                    <Trash2 size={16} /> ENCERRAR SLIDESHOW
+                                </button>
+                            )}
+                        </div>
+                        {roomData?.activeImage && (
+                            <div className="mt-2 border border-blue-500/30 p-2 max-w-sm">
+                                <span className="text-xs text-blue-400 mb-1 block uppercase font-bold tracking-widest">Transmitindo Atualmente:</span>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={roomData.activeImage} alt="Transmissão Ativa" className="max-h-32 object-contain opacity-80" />
+                            </div>
+                        )}
+                    </div>
+
                     {orderedPlayers.length === 0 && (
                         <div className="text-emerald-800 p-8 border border-emerald-900/50 bg-emerald-950/10">
                             Nenhuma assinatura vital detectada neste setor.
@@ -744,45 +867,53 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveU
                 </div>
 
                 <div className="flex-1 flex flex-col justify-between">
-                    {/* EKG Miniature */}
-                    <div className="h-4 w-full mb-2 opacity-80">
-                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} isDead={isDead} />
-                    </div>
-
                     <div className="grid grid-cols-1 gap-2">
-                        {/* SAÚDE */}
-                        <div className="flex justify-between items-center bg-zinc-900/50 p-1 border border-emerald-900">
-                            <span className={`text-[10px] pl-1 ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>SAÚDE</span>
-                            <div className="flex items-center text-xs gap-1">
+                        {/* SAÚDE E EKG COMPARTILHADOS */}
+                        <div className="relative border border-emerald-900 overflow-hidden bg-zinc-900/50">
+                            {/* EKG Fundo */}
+                            <div className="absolute inset-x-0 bottom-0 h-8 opacity-40 z-0">
+                                <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} wounds={character.vitals.wounds.current} isDead={isDead} />
+                            </div>
 
-                                {!isDead && (
-                                    <div className="flex ml-1 border border-emerald-800 bg-zinc-950">
-                                        <input
-                                            type="number"
-                                            id={`dmg-${character.id}`}
-                                            className="w-6 bg-transparent text-center text-red-400 outline-none text-[10px]"
-                                            placeholder="0"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    const val = Number(e.currentTarget.value);
-                                                    if (val > 0) onDamage(val);
-                                                    e.currentTarget.value = "";
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                const el = document.getElementById(`dmg-${character.id}`) as HTMLInputElement;
-                                                const val = Number(el.value);
-                                                if (val > 0) onDamage(val);
-                                                el.value = "";
-                                            }}
-                                            className="bg-red-950/80 hover:bg-red-900 text-red-300 text-[9px] px-1 font-bold border-l border-emerald-800 transition-colors"
-                                        >
-                                            DMG
-                                        </button>
+                            {/* Valores de Saúde Frente */}
+                            <div className="relative z-10 flex justify-between items-center p-1">
+                                <span className={`text-[10px] pl-1 font-bold ${isDead ? 'text-red-600' : 'text-emerald-500'} bg-zinc-950/80 px-1`}>SAÚDE</span>
+                                <div className="flex items-center text-xs gap-1 bg-zinc-950/80 px-1 rounded">
+                                    <div className="flex items-center text-[10px] font-mono mx-2">
+                                        <span className={`${isDead ? 'text-red-500' : 'text-emerald-400'}`}>{character.vitals.health.current}</span>
+                                        <span className="text-emerald-800 mx-1">/</span>
+                                        <span className="text-emerald-600">{character.vitals.health.max}</span>
                                     </div>
-                                )}
+
+                                    {!isDead && (
+                                        <div className="flex ml-1 border border-emerald-800 bg-zinc-950">
+                                            <input
+                                                type="number"
+                                                id={`dmg-${character.id}`}
+                                                className="w-6 bg-transparent text-center text-red-400 outline-none text-[10px]"
+                                                placeholder="0"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const val = Number(e.currentTarget.value);
+                                                        if (val > 0) onDamage(val);
+                                                        e.currentTarget.value = "";
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const el = document.getElementById(`dmg-${character.id}`) as HTMLInputElement;
+                                                    const val = Number(el.value);
+                                                    if (val > 0) onDamage(val);
+                                                    el.value = "";
+                                                }}
+                                                className="bg-red-950/80 hover:bg-red-900 text-red-300 text-[9px] px-1 font-bold border-l border-emerald-800 transition-colors"
+                                            >
+                                                DMG
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         {/* FERIDAS */}

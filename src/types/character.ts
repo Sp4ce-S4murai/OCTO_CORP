@@ -100,6 +100,7 @@ export interface RoomData {
     players: Record<string, CharacterSheet>;
     playerOrder?: string[];
     logs: Record<string, RollLog>;
+    activeImage?: string;
 }
 
 export interface RollLog {
