@@ -233,51 +233,6 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         }
     };
 
-    const handleAddCondition = (playerId: string) => {
-        const char = roomData?.players?.[playerId];
-        if (!char) return;
-
-        const conditionName = window.prompt("Nome da Condição:");
-        if (!conditionName) return;
-        const conditionDesc = window.prompt("Descrição/Efeito da Condição:");
-        if (!conditionDesc) return;
-
-        const isFatal = window.confirm("Esta Condição é FATAL? (Causa Morte Imediata ao Jogador)");
-
-        const newConsequence = {
-            id: crypto.randomUUID(),
-            name: conditionName,
-            type: isFatal ? "damage" : "debuff",
-            target_stat: "all",
-            modifier_type: "disadvantage",
-            modifier_value: null,
-            duration_type: "permanent",
-            duration_value: null,
-            ui_description: conditionDesc,
-            is_fatal: isFatal
-        };
-        const existingConsequences = char.consequences || [];
-        const newConsequences = [...existingConsequences, newConsequence as unknown as Consequence];
-
-        if (isFatal) {
-            updatePlayer(roomId, char.id, {
-                consequences: newConsequences,
-                "vitals/health/current": 0,
-            } as Record<string, unknown>);
-        } else {
-            updatePlayer(roomId, char.id, { consequences: newConsequences });
-        }
-
-        pushLog(roomId, {
-            timestamp: getTimestamp(),
-            playerName: "SISTEMA MOTHERSHIP",
-            playerId: "sys",
-            statName: `CONDIÇÃO APLICADA: ${char.name} > ${conditionName}`,
-            statValue: 0,
-            roll: 0,
-            result: 'Tabela de Pânico'
-        });
-    };
 
     const handleTriggerPanic = (playerId: string) => {
         const char = roomData?.players?.[playerId];
@@ -575,7 +530,6 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             onUpdate={(path, val) => handleUpdate(player.id, path, val as string | number | boolean)}
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
-                            onAddCondition={() => handleAddCondition(player.id)}
                             onInspect={() => setSelectedPlayerId(player.id)}
                             onMoveUp={() => movePlayer(player.id, 'UP')}
                             onMoveDown={() => movePlayer(player.id, 'DOWN')}
@@ -736,7 +690,6 @@ interface MiniSheetProps {
     onUpdate: (path: string, val: string | number | boolean) => void;
     onDamage: (val: number) => void;
     onStress: (val: number) => void;
-    onAddCondition: () => void;
     onInspect: () => void;
     onMoveUp?: () => void;
     onMoveDown?: () => void;
@@ -744,7 +697,7 @@ interface MiniSheetProps {
     isLast?: boolean;
 }
 
-function MiniSheet({ character, onUpdate, onDamage, onStress, onAddCondition, onInspect, onMoveUp, onMoveDown, isFirst, isLast }: MiniSheetProps) {
+function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveUp, onMoveDown, isFirst, isLast }: MiniSheetProps) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     const getAvatarFilterState = () => {
@@ -853,13 +806,6 @@ function MiniSheet({ character, onUpdate, onDamage, onStress, onAddCondition, on
                                     title="Pânico Diretor (+1 Stress)"
                                 >
                                     +1
-                                </button>
-                                <button
-                                    onClick={onAddCondition}
-                                    className="ml-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 text-[10px] px-1 font-bold border-l border-amber-800 transition-colors"
-                                    title="Aplicar Condição Manual"
-                                >
-                                    +COND
                                 </button>
                             </div>
                         </div>
