@@ -37,6 +37,20 @@ const VOID_MESSAGES = [
     "Aquela sombra não tem dono.", "O eco das suas mentiras.", "Uma respiração que não é sua.", "Arranhando o vidro.", "Deixe-os entrar..."
 ];
 
+// Global AudioContext to bypass mobile browser restrictions (iOS Safari)
+let globalAudioCtx: AudioContext | null = null;
+const getAudioContext = () => {
+    if (typeof window === 'undefined') return null;
+    if (!globalAudioCtx) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+            globalAudioCtx = new AudioContextClass();
+        }
+    }
+    return globalAudioCtx;
+};
+
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
     const [isRoomLocked, setIsRoomLocked] = useState(false);
@@ -54,6 +68,35 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     // Track other players in the room
     const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
+
+    // iOS Web Audio API Unlocker
+    useEffect(() => {
+        const unlockAudio = () => {
+            const ctx = getAudioContext();
+            if (!ctx) return;
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            // Create empty buffer and play it to guarantee unlock on strict browsers
+            const buffer = ctx.createBuffer(1, 1, 22050);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start(0);
+
+            // Clean up listeners after unlocking
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+        };
+
+        document.addEventListener('click', unlockAudio);
+        document.addEventListener('touchstart', unlockAudio);
+
+        return () => {
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('touchstart', unlockAudio);
+        };
+    }, []);
 
     useEffect(() => {
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
@@ -340,9 +383,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             let stepTimer: NodeJS.Timeout;
 
             try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                audioCtx = new AudioContextClass();
+                audioCtx = getAudioContext();
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
 
                 const playRadioGlitch = () => {
                     if (!audioCtx) return;
@@ -473,9 +517,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 if (source) {
                     try { source.stop(); source.disconnect(); } catch (e) { /* ignore */ }
                 }
-                if (audioCtx) {
-                    audioCtx.close();
-                }
+                // Do not close audioCtx since it's a shared global context now
             };
         } else {
             setJumpscareImage(null);
