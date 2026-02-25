@@ -755,6 +755,28 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                     )}
                 </div>
             </aside>
+
+            {/* MOBILE WARNING BANNER */}
+            <div className="fixed bottom-0 left-0 right-0 z-[120] bg-amber-950/95 border-t-4 border-amber-500 p-4 xl:hidden flex flex-col items-center justify-center text-center backdrop-blur-lg shadow-[0_-20px_50px_rgba(245,158,11,0.3)] animate-in slide-in-from-bottom duration-500">
+                <AlertTriangle size={24} className="text-amber-500 mb-2 animate-pulse" />
+                <p className="text-amber-400 font-bold uppercase tracking-widest text-xs mb-1">
+                    [ ALERTA DE SISTEMA ]
+                </p>
+                <p className="text-amber-200/80 text-xs leading-tight max-w-[90%] font-mono uppercase">
+                    Terminal sub-ótimo detectado. Recomendamos exibição de computador.
+                </p>
+                <button
+                    onClick={() => {
+                        const viewport = document.querySelector("meta[name=viewport]");
+                        if (viewport) {
+                            viewport.setAttribute("content", "width=1280, initial-scale=1");
+                        }
+                    }}
+                    className="mt-4 bg-amber-900/80 border border-amber-500 text-amber-100 px-6 py-3 text-xs uppercase font-bold tracking-widest hover:bg-amber-800 transition-colors shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                >
+                    FORÇAR INTERFACE DESKTOP
+                </button>
+            </div>
         </div>
     );
 }
