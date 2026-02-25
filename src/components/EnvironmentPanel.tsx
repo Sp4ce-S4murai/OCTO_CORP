@@ -36,10 +36,11 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
     }, []);
 
     const isMissing = !environment;
+    const isVoid = environment?.presetName === 'O Vazio';
 
     // Parse values or default to ---
     const parseBase = (val: string | undefined, fallback: number) => {
-        if (!val || val === '---') return fallback;
+        if (!val || val === '---' || val === 'ERR') return fallback;
         const parsed = parseFloat(val);
         return isNaN(parsed) ? fallback : parsed;
     };
@@ -50,13 +51,18 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
     const baseGrav = parseBase(environment?.gravity, 0);
     const baseRad = parseBase(environment?.radiation, 0);
 
-    const temp = isMissing ? "---" : (baseTemp + fluctuations.temp).toFixed(1);
-    const pres = isMissing ? "---" : Math.max(0, basePres + fluctuations.pres).toFixed(2);
+    const glitchString = () => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+        return Array.from({ length: 3 }).map(() => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+    };
+
+    const temp = isVoid ? glitchString() : isMissing ? "---" : (baseTemp + fluctuations.temp).toFixed(1);
+    const pres = isVoid ? glitchString() : isMissing ? "---" : Math.max(0, basePres + fluctuations.pres).toFixed(2);
     let o2Parsed = baseO2 + fluctuations.o2;
     if (environment?.oxygen === 'Corrosivo' || environment?.oxygen === '0%') o2Parsed = 0;
-    const o2 = isMissing ? "---" : Math.max(0, o2Parsed).toFixed(1);
-    const grav = isMissing ? "---" : Math.max(0, baseGrav + fluctuations.grav).toFixed(2);
-    const rad = isMissing ? "---" : Math.max(0, baseRad + fluctuations.rad).toFixed(2);
+    const o2 = isVoid ? glitchString() : isMissing ? "---" : Math.max(0, o2Parsed).toFixed(1);
+    const grav = isVoid ? glitchString() : isMissing ? "---" : Math.max(0, baseGrav + fluctuations.grav).toFixed(2);
+    const rad = isVoid ? glitchString() : isMissing ? "---" : Math.max(0, baseRad + fluctuations.rad).toFixed(2);
 
     // Hazard conditions
     const o2Crit = !isMissing && (o2Parsed < 18 || environment?.oxygen === '0%' || environment?.oxygen === 'Corrosivo');
@@ -74,6 +80,10 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
     // Danger Glow Logic Function
     const getGlow = (crit: boolean, warn: boolean, type: string) => {
         if (isMissing) return 'text-emerald-950'; // Off
+
+        if (isVoid) {
+            return `text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,1)] animate-ping`;
+        }
 
         if (crit || warn) {
             let colorClass = 'text-amber-500 drop-shadow-[0_0_5px_rgba(245,158,11,0.8)]'; // Default warn
@@ -101,6 +111,7 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
 
     const tempColorStr = () => {
         if (isMissing) return "text-emerald-800";
+        if (isVoid) return "text-red-500 animate-pulse drop-shadow-[0_0_8px_rgba(239,68,68,1)] text-lg";
         if (baseTemp <= -80) return "text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.4)]";
         if (baseTemp < 0) return "text-cyan-400";
         if (baseTemp > 30 && baseTemp <= 40) return "text-yellow-400";
@@ -114,7 +125,7 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
 
             {/* PRESET NAME & COORDS */}
             <div className="flex items-center gap-3 shrink-0 pr-4 border-r border-emerald-900/30">
-                <div className={`font-bold tracking-widest uppercase ${isMissing ? 'text-red-600 animate-pulse' : 'text-emerald-400'}`}>
+                <div className={`font-bold tracking-widest uppercase ${isMissing ? 'text-red-600 animate-pulse' : isVoid ? 'text-red-500 animate-bounce' : 'text-emerald-400'}`}>
                     {environment?.presetName || 'SINAL PERDIDO'}
                 </div>
                 {!isMissing && (
@@ -133,22 +144,22 @@ export function EnvironmentPanel({ environment }: { environment?: EnvironmentSta
 
                 <div className="flex items-center gap-1.5" title="Oxigênio">
                     <Biohazard className={getGlow(o2Crit, o2Warn, 'o2')} size={14} />
-                    <span className={o2Crit ? 'text-fuchsia-500' : o2Warn ? 'text-amber-400' : 'text-emerald-500'}>{o2} <span className="text-[8px] opacity-70">%</span></span>
+                    <span className={isVoid ? 'text-red-500 animate-pulse text-lg' : o2Crit ? 'text-fuchsia-500' : o2Warn ? 'text-amber-400' : 'text-emerald-500'}>{o2} <span className="text-[8px] opacity-70">%</span></span>
                 </div>
 
                 <div className="flex items-center gap-1.5" title="Pressão">
                     <Gauge className={getGlow(presCrit, presWarn, 'pres')} size={14} />
-                    <span className={presCrit ? 'text-red-500' : presWarn ? 'text-amber-400' : 'text-emerald-500'}>{pres} <span className="text-[8px] opacity-70">ATM</span></span>
+                    <span className={isVoid ? 'text-red-500 animate-pulse text-lg' : presCrit ? 'text-red-500' : presWarn ? 'text-amber-400' : 'text-emerald-500'}>{pres} <span className="text-[8px] opacity-70">ATM</span></span>
                 </div>
 
                 <div className="flex items-center gap-1.5" title="Gravidade">
                     <span className="text-emerald-800">G:</span>
-                    <span className="text-emerald-500">{grav}</span>
+                    <span className={isVoid ? 'text-red-500 animate-pulse text-lg' : 'text-emerald-500'}>{grav}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5" title="Radiação">
                     <Radiation className={getGlow(radCrit, radWarn, 'rad')} size={14} />
-                    <span className={radCrit ? 'text-green-500' : radWarn ? 'text-amber-400' : 'text-emerald-500'}>{rad} <span className="text-[8px] opacity-70">mSv</span></span>
+                    <span className={isVoid ? 'text-red-500 animate-pulse text-lg' : radCrit ? 'text-green-500' : radWarn ? 'text-amber-400' : 'text-emerald-500'}>{rad} <span className="text-[8px] opacity-70">mSv</span></span>
                 </div>
             </div>
 

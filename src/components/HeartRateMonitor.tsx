@@ -7,25 +7,41 @@ interface Props {
     stress: number;
     wounds: number;
     isDead: boolean;
+    isVoid?: boolean;
 }
 
-export function HeartRateMonitor({ currentHp, maxHp, stress, wounds, isDead }: Props) {
+export function HeartRateMonitor({ currentHp, maxHp, stress, wounds, isDead, isVoid }: Props) {
     const [soundEnabled, setSoundEnabled] = useState(false);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+    const [glitchSpeed, setGlitchSpeed] = useState(1);
+    useEffect(() => {
+        if (isVoid && !isDead) {
+            const interval = setInterval(() => {
+                setGlitchSpeed(Math.random() * 0.5 + 0.1);
+            }, 150);
+            return () => clearInterval(interval);
+        } else {
+            setGlitchSpeed(1);
+        }
+    }, [isVoid, isDead]);
+
     // 1. STRESS (E): Frequência - O multiplicador de tempo
     // BPM Base: BPM = 60 + (E * 6)
-    const bpm = 60 + (stress * 6);
+    const bpm = isVoid ? 200 : 60 + (stress * 6);
     // Tempo final em segundos de um ciclo (60s / BPM)
-    const finalSpeed = 60 / bpm;
+    const finalSpeed = (60 / bpm) * glitchSpeed;
 
     // 2. SAÚDE (S): Amplitude e Cor 
     // Mapeamento visual com base na vitalidade da criatura
     let colorClass = "stroke-emerald-500 shadow-emerald-500";
     let glowClass = "shadow-[0_0_8px_rgba(16,185,129,0.8)]"; // default emerald glow
 
-    if (currentHp <= 3) {
+    if (isVoid) {
+        colorClass = "stroke-red-600 animate-pulse";
+        glowClass = "shadow-[0_0_15px_rgba(220,38,38,1)]";
+    } else if (currentHp <= 3) {
         // Estado Crítico: Baixa amplitude ("arrastando"), cor vermelha/âmbar opaco
         colorClass = "stroke-red-500 opacity-80";
         glowClass = "shadow-[0_0_4px_rgba(239,68,68,0.5)]";
@@ -38,7 +54,9 @@ export function HeartRateMonitor({ currentHp, maxHp, stress, wounds, isDead }: P
     // 3. FERIDAS (F): Entropia e Ruído
     // Adiciona classes adicionais ao container principal para simular o "jitter" ou oscilação base
     let containerAnimationClass = "";
-    if (wounds === 1) {
+    if (isVoid) {
+        containerAnimationClass = "animate-[heavy-oscillation_0.1s_infinite]";
+    } else if (wounds === 1) {
         containerAnimationClass = "animate-[slight-jitter_2s_infinite]";
     } else if (wounds === 2) {
         containerAnimationClass = "animate-[moderate-jitter_1s_infinite]";

@@ -14,6 +14,29 @@ import { PanicIcon } from "./PanicIcon";
 import { EnvironmentState } from "@/types/character";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
 
+const VOID_MESSAGES = [
+    "Você não está respirando.", "Eles estão te olhando.", "Sua pele não é sua.", "Atrás de você.", "As paredes respiram.",
+    "O escuro sabe seu nome.", "Aquilo não era humano.", "Por que você parou?", "Não confie neles.", "O sangue não é seu.",
+    "Eles já estão na nave.", "Olhe de novo.", "Sua mente está vazando.", "Isso não é um jogo.", "Você vai morrer aqui.",
+    "Eles voltaram.", "O ar está acabando.", "O sensor mentiu.", "Ele está sorrindo para você.", "A sombra se moveu.",
+    "Não feche os olhos.", "Falta pouco.", "Está debaixo da sua pele.", "Você me ouve?", "Nós estamos com fome.",
+    "Abra a porta.", "Eles sabem o que você fez.", "Não tem ninguém aí.", "O vazio te abraça.", "A dor é o começo.",
+    "Esse sangue é seu?", "O rádio está mentindo.", "Cuidado com o teto.", "Alguém sussurrou seu nome.", "A contagem regressiva...",
+    "Eles não podem ser mortos.", "A escuridão tem dentes.", "Está tão frio...", "Você é o próximo.", "O sistema falhou.",
+    "Não olhe para a câmera.", "A tripulação anterior também lutou.", "Apenas carne.", "Os mortos não dormem.", "Aquela coisa te viu.",
+    "Você esqueceu como chorar.", "Tem algo na sua garganta.", "Por que está tão quieto?", "O abismo devolve o olhar.", "Ouviu isso?",
+    "Você não consegue fugir.", "Eles estão no duto de ar.", "Cuidado onde pisa.", "Foi você quem os trouxe.", "O sinal foi cortado.",
+    "Eles conhecem seus pecados.", "Seus pulmões vão ceder.", "Não existe resgate.", "Sinta eles se aproximando.", "Ninguém vai ajudar.",
+    "Você os convidou para entrar.", "A carne cede.", "Onde está o resto da tripulação?", "Isso não é terra firme.", "Cuidado.",
+    "Eles vestem a pele dos seus amigos.", "Ouça o rastejar.", "Não respire tão alto.", "Os olhos na parede.", "A luz nunca existiu.",
+    "O escuro não é vazio.", "A porta não estava trancada.", "Quem você está enganando?", "O pânico é inútil.", "Você falhou.",
+    "Ele está logo ali.", "Você sente esse cheiro?", "Esgotado. Quebrado. Sozinho.", "Isso não é um sonho.", "Acorde.",
+    "O sangue deles em suas mãos.", "Os monitores estão errados.", "Tem alguém atrás da tela.", "Aperte o passo.", "Já é tarde demais.",
+    "Seu coração vai parar.", "O espaço não é estéril.", "Algo eclodiu.", "As luzes nunca mais vão acender.", "O fim.",
+    "Você é um fantasma preso num traje.", "Onde está a saída?", "Aquele barulho não foi a nave.", "Açougue.", "Não existe esperança.",
+    "Aquela sombra não tem dono.", "O eco das suas mentiras.", "Uma respiração que não é sua.", "Arranhando o vidro.", "Deixe-os entrar..."
+];
+
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
     const [isRoomLocked, setIsRoomLocked] = useState(false);
@@ -272,11 +295,197 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         e.target.value = "";
     };
 
+    const isVoid = environment?.presetName === 'O Vazio';
+    const isDead = character ? character.vitals.wounds.current >= character.vitals.wounds.max : false;
+    const [jumpscareImage, setJumpscareImage] = useState<string | null>(null);
+    const [voidMessage, setVoidMessage] = useState<{ text: string, x: number, y: number } | null>(null);
+
+    useEffect(() => {
+        let audioCtx: AudioContext | null = null;
+        let source: AudioBufferSourceNode | null = null;
+        let timer: NodeJS.Timeout;
+        let messageTimer: NodeJS.Timeout;
+
+        if (isVoid && !isDead) {
+            // Jumpscare cycle
+            const cycle = () => {
+                const timeout = Math.random() * 5000 + 1000;
+                timer = setTimeout(() => {
+                    const randomId = Math.floor(Math.random() * 10) + 1;
+                    setJumpscareImage(`/jumpscares/${randomId}.jpg`);
+                    setTimeout(() => setJumpscareImage(null), Math.random() * 300 + 50);
+                    cycle();
+                }, timeout);
+            };
+            cycle();
+
+            // Disturbing Messages cycle
+            const messageCycle = () => {
+                const timeout = Math.random() * 8000 + 4000; // 4s to 12s
+                messageTimer = setTimeout(() => {
+                    if (Math.random() < 0.7) { // 70% chance to show a message each tick
+                        const randomMsg = VOID_MESSAGES[Math.floor(Math.random() * VOID_MESSAGES.length)];
+                        const randomX = Math.random() * 80 + 10; // 10% to 90% view width
+                        const randomY = Math.random() * 80 + 10; // 10% to 90% view height
+                        setVoidMessage({ text: randomMsg, x: randomX, y: randomY });
+                        setTimeout(() => setVoidMessage(null), Math.random() * 2000 + 1500); // 1.5s to 3.5s duration
+                    }
+                    messageCycle();
+                }, timeout);
+            };
+            messageCycle();
+
+            // Web Audio API Erratic Hallucinations (Interferences, Footsteps, Drones)
+            let audioTimer: NodeJS.Timeout;
+            let stepTimer: NodeJS.Timeout;
+
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                audioCtx = new AudioContextClass();
+
+                const playRadioGlitch = () => {
+                    if (!audioCtx) return;
+                    const duration = Math.random() * 0.5 + 0.1;
+                    const bufferSize = audioCtx.sampleRate * duration;
+                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = Math.random() * 2 - 1;
+                    }
+
+                    source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.value = Math.random() * 2000 + 800; // Radio static frequency
+                    filter.Q.value = Math.random() * 2;
+
+                    const gainNode = audioCtx.createGain();
+                    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+                    source.connect(filter);
+                    filter.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    source.start(audioCtx.currentTime);
+                };
+
+                const playFootstepSequence = () => {
+                    if (!audioCtx) return;
+                    const steps = Math.floor(Math.random() * 4) + 2; // 2 to 5 steps
+                    let stepCount = 0;
+
+                    const playSingleStep = () => {
+                        if (!audioCtx || stepCount >= steps) return;
+
+                        // Synthesize a low frequency thud
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(150, audioCtx.currentTime); // Start low
+                        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.1); // Drop quickly to simulate impact
+
+                        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0.9, audioCtx.currentTime + 0.02); // Maximum thump volume
+                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3); // decay
+
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+
+                        osc.start(audioCtx.currentTime);
+                        osc.stop(audioCtx.currentTime + 0.3);
+
+                        stepCount++;
+                        if (stepCount < steps) {
+                            const nextStepDelay = Math.random() * 400 + 400; // 0.4s to 0.8s between steps
+                            stepTimer = setTimeout(playSingleStep, nextStepDelay);
+                        }
+                    };
+
+                    playSingleStep();
+                };
+
+                const playDrone = () => {
+                    if (!audioCtx) return;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    const duration = Math.random() * 3 + 2; // 2 to 5 seconds
+
+                    osc.type = 'sawtooth';
+                    // Very high pitch tinnitus or very low rumble
+                    osc.frequency.value = Math.random() > 0.5 ? (Math.random() * 2000 + 6000) : (Math.random() * 40 + 30);
+
+                    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(Math.random() * 0.04 + 0.01, audioCtx.currentTime + duration / 2); // swell up
+                    gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + duration); // fade out
+
+                    // Add slight detune for unsettling effect
+                    const lfo = audioCtx.createOscillator();
+                    lfo.type = 'sine';
+                    lfo.frequency.value = Math.random() * 8 + 2; // wobble speed
+                    const lfoGain = audioCtx.createGain();
+                    lfoGain.gain.value = 10; // pitch variation amount
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(osc.detune);
+                    lfo.start(audioCtx.currentTime);
+                    lfo.stop(audioCtx.currentTime + duration);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(audioCtx.currentTime);
+                    osc.stop(audioCtx.currentTime + duration);
+                };
+
+                const scheduleNextEvent = () => {
+                    // Much longer gaps: 5 seconds to 25 seconds between events
+                    const timeUntilNext = Math.random() * 20000 + 5000;
+
+                    audioTimer = setTimeout(() => {
+                        const eventType = Math.random();
+                        if (eventType < 0.4) {
+                            playRadioGlitch(); // 40% chance radio static burst
+                        } else if (eventType < 0.7) {
+                            playFootstepSequence(); // 30% chance heavy footsteps
+                        } else {
+                            playDrone(); // 30% chance unsettling drone/tinnitus
+                        }
+                        scheduleNextEvent();
+                    }, timeUntilNext);
+                };
+
+                // Start the cycle
+                scheduleNextEvent();
+
+            } catch (e) {
+                console.error("Audio API error", e);
+            }
+
+            return () => {
+                clearTimeout(timer);
+                clearTimeout(messageTimer);
+                clearTimeout(audioTimer);
+                clearTimeout(stepTimer);
+                if (source) {
+                    try { source.stop(); source.disconnect(); } catch (e) { /* ignore */ }
+                }
+                if (audioCtx) {
+                    audioCtx.close();
+                }
+            };
+        } else {
+            setJumpscareImage(null);
+            setVoidMessage(null);
+        }
+    }, [isVoid, isDead]);
+
     if (loading || !character) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Carregando Conexão Neural...</div>;
     }
-
-    const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     // Combat / Encounter Logic
     const isEncounterActive = encounter?.isActive;
@@ -334,7 +543,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     };
 
     // Global Theme Override based on Combat Turn
-    const activeBorderTheme = isMyTurn ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : (isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80');
+    const activeBorderTheme = (isVoid && !isDead) ? 'border-zinc-500 bg-zinc-950/80 shadow-[0_0_50px_rgba(255,255,255,0.2)] grayscale' : (isMyTurn ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : (isDead ? 'border-red-900 bg-red-950/20' : 'border-emerald-900 bg-zinc-950/80'));
 
     const handlePanicSubmit = (type: 'roll' | 'manual') => {
         let rolledD20 = 0;
@@ -358,6 +567,37 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-8 items-start relative pb-24">
+            {/* JUMPSCARE OVERLAY */}
+            {jumpscareImage && (
+                <div className="fixed inset-0 z-[300] bg-black flex items-center justify-center pointer-events-none">
+                    <img src={jumpscareImage} className="w-full h-full object-cover mix-blend-difference opacity-90 animate-pulse" alt="Anomalia" />
+                </div>
+            )}
+
+            {/* VOID CRT NOISE OVERLAY */}
+            {isVoid && !isDead && (
+                <>
+                    {/* Dark background tint, toned down for legibility */}
+                    <div className="fixed inset-0 z-[-10] bg-black/50 pointer-events-none"></div>
+
+                    {/* Unsettling Random Text Messages */}
+                    {voidMessage && (
+                        <div
+                            className="fixed z-[250] text-red-600 font-mono font-bold text-sm md:text-xl xl:text-3xl mix-blend-screen opacity-70 tracking-widest uppercase pointer-events-none animate-in fade-in zoom-in duration-1000"
+                            style={{ left: `${voidMessage.x}%`, top: `${voidMessage.y}%`, transform: 'translate(-50%, -50%)', textShadow: '0 0 10px rgba(220, 38, 38, 0.8)' }}
+                        >
+                            {voidMessage.text}
+                        </div>
+                    )}
+
+                    {/* TV Static SVG Noise, opacity lowered to not block text */}
+                    <div className="fixed inset-0 z-[50] pointer-events-none opacity-20 mix-blend-overlay bg-[url('data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%20200%20200%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cfilter%20id%3D%22noise%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.85%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url%28%23noise%29%22%2F%3E%3C%2Fsvg%3E')] animate-[heavy-oscillation_0.1s_infinite]"></div>
+
+                    {/* Additional jittering scanlines, also more transparent */}
+                    <div className="fixed inset-0 z-[51] pointer-events-none bg-[repeating-linear-gradient(transparent,transparent_2px,rgba(0,0,0,0.4)_3px)] bg-[length:100%_4px] animate-[moderate-jitter_0.5s_infinite]"></div>
+                </>
+            )}
+
             {/* FULLSCREEN IMAGE MODAL (Diretor's Slideshow) */}
             {activeImage && (
                 <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 duration-500">
@@ -616,7 +856,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                 {/* COMPACT VITALS */}
                                 <div className="flex-1 flex flex-col gap-2 min-w-[280px]">
                                     <div className="h-4 w-full mb-1 opacity-80">
-                                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} wounds={character.vitals.wounds.current} isDead={isDead} />
+                                        <HeartRateMonitor currentHp={character.vitals.health.current} maxHp={character.vitals.health.max} stress={character.vitals.stress.current} wounds={character.vitals.wounds.current} isDead={isDead} isVoid={isVoid} />
                                     </div>
                                     <div className="grid grid-cols-1 gap-2 border border-emerald-900/30 p-2 bg-emerald-950/10">
                                         {/* SAÚDE */}
@@ -746,7 +986,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                         </div>
                                         {/* HeartRateMonitor below */}
                                         <div className="px-0">
-                                            <HeartRateMonitor currentHp={p.hp} maxHp={p.maxHp} stress={p.stress} wounds={p.wounds} isDead={isDead} />
+                                            <HeartRateMonitor currentHp={p.hp} maxHp={p.maxHp} stress={p.stress} wounds={p.wounds} isDead={isDead} isVoid={isVoid} />
                                         </div>
                                     </div>
                                 );
@@ -755,28 +995,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                     )}
                 </div>
             </aside>
-
-            {/* MOBILE WARNING BANNER */}
-            <div className="fixed bottom-0 left-0 right-0 z-[120] bg-amber-950/95 border-t-4 border-amber-500 p-4 xl:hidden flex flex-col items-center justify-center text-center backdrop-blur-lg shadow-[0_-20px_50px_rgba(245,158,11,0.3)] animate-in slide-in-from-bottom duration-500">
-                <AlertTriangle size={24} className="text-amber-500 mb-2 animate-pulse" />
-                <p className="text-amber-400 font-bold uppercase tracking-widest text-xs mb-1">
-                    [ ALERTA DE SISTEMA ]
-                </p>
-                <p className="text-amber-200/80 text-xs leading-tight max-w-[90%] font-mono uppercase">
-                    Terminal sub-ótimo detectado. Recomendamos exibição de computador.
-                </p>
-                <button
-                    onClick={() => {
-                        const viewport = document.querySelector("meta[name=viewport]");
-                        if (viewport) {
-                            viewport.setAttribute("content", "width=1280, initial-scale=1");
-                        }
-                    }}
-                    className="mt-4 bg-amber-900/80 border border-amber-500 text-amber-100 px-6 py-3 text-xs uppercase font-bold tracking-widest hover:bg-amber-800 transition-colors shadow-[0_0_15px_rgba(245,158,11,0.4)]"
-                >
-                    FORÇAR INTERFACE DESKTOP
-                </button>
-            </div>
         </div>
     );
 }

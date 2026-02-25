@@ -119,7 +119,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         'Pântano Ácido (Tóxico)': { presetName: 'Pântano Ácido', temperature: '45', pressure: '2.0', oxygen: '12', luminosity: 'Neblina Verde', gravity: '1.0', radiation: '60' },
         'Estação Abandonada (Falha Energética)': { presetName: 'Estação Abandonada', temperature: '5', pressure: '0.8', oxygen: '15', luminosity: 'Piscando', gravity: '0.1', radiation: '10' },
         'Gigante Gasoso (Queda Livre)': { presetName: 'Atmosfera Densa', temperature: '-120', pressure: '45.0', oxygen: '0', luminosity: 'Tempestade Magnética', gravity: '3.5', radiation: '500' },
-        'Zona de Quarentena (Nível 5)': { presetName: 'Quarentena Biológica', temperature: '38', pressure: '1.5', oxygen: 'Corrosivo', luminosity: 'Luz Negra', gravity: '1.0', radiation: '5' }
+        'Zona de Quarentena (Nível 5)': { presetName: 'Quarentena Biológica', temperature: '38', pressure: '1.5', oxygen: 'Corrosivo', luminosity: 'Luz Negra', gravity: '1.0', radiation: '5' },
+        'O Vazio (Anomalia)': { presetName: 'O Vazio', temperature: '---', pressure: '---', oxygen: '---', luminosity: 'NULA', gravity: 'ERR', radiation: 'ERR' }
     };
 
     const applyEnvironmentPreset = (presetName: keyof typeof ENVIRONMENT_PRESETS) => {
