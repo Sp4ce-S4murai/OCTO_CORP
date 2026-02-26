@@ -37,20 +37,6 @@ const VOID_MESSAGES = [
     "Aquela sombra não tem dono.", "O eco das suas mentiras.", "Uma respiração que não é sua.", "Arranhando o vidro.", "Deixe-os entrar..."
 ];
 
-// Global AudioContext to bypass mobile browser restrictions (iOS Safari)
-let globalAudioCtx: AudioContext | null = null;
-const getAudioContext = () => {
-    if (typeof window === 'undefined') return null;
-    if (!globalAudioCtx) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-            globalAudioCtx = new AudioContextClass();
-        }
-    }
-    return globalAudioCtx;
-};
-
 export default function PlayerSheetClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
     const [isRoomLocked, setIsRoomLocked] = useState(false);
@@ -68,35 +54,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     // Track other players in the room
     const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
-
-    // iOS Web Audio API Unlocker
-    useEffect(() => {
-        const unlockAudio = () => {
-            const ctx = getAudioContext();
-            if (!ctx) return;
-            if (ctx.state === 'suspended') {
-                ctx.resume();
-            }
-            // Create empty buffer and play it to guarantee unlock on strict browsers
-            const buffer = ctx.createBuffer(1, 1, 22050);
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(ctx.destination);
-            source.start(0);
-
-            // Clean up listeners after unlocking
-            document.removeEventListener('click', unlockAudio);
-            document.removeEventListener('touchstart', unlockAudio);
-        };
-
-        document.addEventListener('click', unlockAudio);
-        document.addEventListener('touchstart', unlockAudio);
-
-        return () => {
-            document.removeEventListener('click', unlockAudio);
-            document.removeEventListener('touchstart', unlockAudio);
-        };
-    }, []);
 
     useEffect(() => {
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
@@ -344,8 +301,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [voidMessage, setVoidMessage] = useState<{ text: string, x: number, y: number } | null>(null);
 
     useEffect(() => {
-        let audioCtx: AudioContext | null = null;
-        let source: AudioBufferSourceNode | null = null;
         let timer: NodeJS.Timeout;
         let messageTimer: NodeJS.Timeout;
 
@@ -378,147 +333,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             };
             messageCycle();
 
-            // Web Audio API Erratic Hallucinations (Interferences, Footsteps, Drones)
-            let audioTimer: NodeJS.Timeout;
-            let stepTimer: NodeJS.Timeout;
-
-            try {
-                audioCtx = getAudioContext();
-                if (audioCtx && audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-
-                const playRadioGlitch = () => {
-                    if (!audioCtx) return;
-                    const duration = Math.random() * 0.5 + 0.1;
-                    const bufferSize = audioCtx.sampleRate * duration;
-                    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                    const data = buffer.getChannelData(0);
-                    for (let i = 0; i < bufferSize; i++) {
-                        data[i] = Math.random() * 2 - 1;
-                    }
-
-                    source = audioCtx.createBufferSource();
-                    source.buffer = buffer;
-
-                    const filter = audioCtx.createBiquadFilter();
-                    filter.type = 'bandpass';
-                    filter.frequency.value = Math.random() * 2000 + 800; // Radio static frequency
-                    filter.Q.value = Math.random() * 2;
-
-                    const gainNode = audioCtx.createGain();
-                    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-                    gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-
-                    source.connect(filter);
-                    filter.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
-                    source.start(audioCtx.currentTime);
-                };
-
-                const playFootstepSequence = () => {
-                    if (!audioCtx) return;
-                    const steps = Math.floor(Math.random() * 4) + 2; // 2 to 5 steps
-                    let stepCount = 0;
-
-                    const playSingleStep = () => {
-                        if (!audioCtx || stepCount >= steps) return;
-
-                        // Synthesize a low frequency thud
-                        const osc = audioCtx.createOscillator();
-                        const gain = audioCtx.createGain();
-
-                        osc.type = 'sine';
-                        osc.frequency.setValueAtTime(150, audioCtx.currentTime); // Start low
-                        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.1); // Drop quickly to simulate impact
-
-                        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-                        gain.gain.linearRampToValueAtTime(0.9, audioCtx.currentTime + 0.02); // Maximum thump volume
-                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3); // decay
-
-                        osc.connect(gain);
-                        gain.connect(audioCtx.destination);
-
-                        osc.start(audioCtx.currentTime);
-                        osc.stop(audioCtx.currentTime + 0.3);
-
-                        stepCount++;
-                        if (stepCount < steps) {
-                            const nextStepDelay = Math.random() * 400 + 400; // 0.4s to 0.8s between steps
-                            stepTimer = setTimeout(playSingleStep, nextStepDelay);
-                        }
-                    };
-
-                    playSingleStep();
-                };
-
-                const playDrone = () => {
-                    if (!audioCtx) return;
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    const duration = Math.random() * 3 + 2; // 2 to 5 seconds
-
-                    osc.type = 'sawtooth';
-                    // Very high pitch tinnitus or very low rumble
-                    osc.frequency.value = Math.random() > 0.5 ? (Math.random() * 2000 + 6000) : (Math.random() * 40 + 30);
-
-                    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-                    gain.gain.linearRampToValueAtTime(Math.random() * 0.04 + 0.01, audioCtx.currentTime + duration / 2); // swell up
-                    gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + duration); // fade out
-
-                    // Add slight detune for unsettling effect
-                    const lfo = audioCtx.createOscillator();
-                    lfo.type = 'sine';
-                    lfo.frequency.value = Math.random() * 8 + 2; // wobble speed
-                    const lfoGain = audioCtx.createGain();
-                    lfoGain.gain.value = 10; // pitch variation amount
-                    lfo.connect(lfoGain);
-                    lfoGain.connect(osc.detune);
-                    lfo.start(audioCtx.currentTime);
-                    lfo.stop(audioCtx.currentTime + duration);
-
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-
-                    osc.start(audioCtx.currentTime);
-                    osc.stop(audioCtx.currentTime + duration);
-                };
-
-                const scheduleNextEvent = () => {
-                    // Much longer gaps: 5 seconds to 25 seconds between events
-                    const timeUntilNext = Math.random() * 20000 + 5000;
-
-                    audioTimer = setTimeout(() => {
-                        const eventType = Math.random();
-                        if (eventType < 0.4) {
-                            playRadioGlitch(); // 40% chance radio static burst
-                        } else if (eventType < 0.7) {
-                            playFootstepSequence(); // 30% chance heavy footsteps
-                        } else {
-                            playDrone(); // 30% chance unsettling drone/tinnitus
-                        }
-                        scheduleNextEvent();
-                    }, timeUntilNext);
-                };
-
-                // Start the cycle
-                scheduleNextEvent();
-
-            } catch (e) {
-                console.error("Audio API error", e);
-            }
-
-            return () => {
-                clearTimeout(timer);
-                clearTimeout(messageTimer);
-                clearTimeout(audioTimer);
-                clearTimeout(stepTimer);
-                if (source) {
-                    try { source.stop(); source.disconnect(); } catch (e) { /* ignore */ }
-                }
-                // Do not close audioCtx since it's a shared global context now
-            };
         } else {
             setJumpscareImage(null);
             setVoidMessage(null);
