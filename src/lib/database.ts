@@ -180,7 +180,13 @@ export const startEncounter = async (roomId: string) => {
         initiatives: {},
         turnOrder: [],
         currentTurnIndex: 0,
-        round: 1
+        round: 1,
+        npcs: {},
+        grid: {
+            isActive: false, // Minimized by default, or Warden can activate it
+            movementPerTurn: 5,
+            entities: {}
+        }
     };
     await set(encPath, initialEncounter);
 };
@@ -202,19 +208,143 @@ export const beginTurns = async (roomId: string, sortedPlayerIds: string[]) => {
 
 export const nextTurn = async (roomId: string, encounter: EncounterState) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
-    const nextIndex = encounter.currentTurnIndex + 1;
+    let nextIndex = encounter.currentTurnIndex + 1;
+    let newRound = encounter.round;
 
     if (nextIndex >= encounter.turnOrder.length) {
         // Loop back to start, increment round
-        await update(encPath, { currentTurnIndex: 0, round: encounter.round + 1 });
-    } else {
-        await update(encPath, { currentTurnIndex: nextIndex });
+        nextIndex = 0;
+        newRound += 1;
     }
+
+    const updates: any = {
+        currentTurnIndex: nextIndex,
+        round: newRound
+    };
+
+    // Reset movement for next player if they are on the grid
+    if (encounter.grid?.entities) {
+        const nextPlayerId = encounter.turnOrder[nextIndex];
+        if (encounter.grid.entities[nextPlayerId]) {
+            updates[`grid/entities/${nextPlayerId}/movementRemaining`] = encounter.grid.movementPerTurn || 5;
+        }
+    }
+
+    await update(encPath, updates);
 };
 
 export const endEncounter = async (roomId: string) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
     await remove(encPath);
+};
+
+export const updateGridMovementSetting = async (roomId: string, movement: number) => {
+    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
+    await update(gridPath, { movementPerTurn: movement });
+};
+
+export const updateGridEntity = async (roomId: string, playerId: string, entityData: { x: number, y: number, icon?: string, movementRemaining?: number }) => {
+    const entityPath = ref(database, `${roomPath(roomId)}/encounter/grid/entities/${playerId}`);
+    await update(entityPath, entityData);
+};
+
+export const removeGridEntity = async (roomId: string, playerId: string) => {
+    const entityPath = ref(database, `${roomPath(roomId)}/encounter/grid/entities/${playerId}`);
+    await remove(entityPath);
+};
+
+export const toggleGridState = async (roomId: string, isActive: boolean) => {
+    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
+    await update(gridPath, { isActive });
+};
+
+export const setGridBackgroundImage = async (roomId: string, base64Image: string) => {
+    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
+    await update(gridPath, { backgroundImage: base64Image });
+};
+
+export const clearGridBackgroundImage = async (roomId: string) => {
+    const imgPath = ref(database, `${roomPath(roomId)}/encounter/grid/backgroundImage`);
+    await remove(imgPath);
+};
+
+// --- NPC SYSTEM ---
+
+export const addNPCToEncounter = async (
+    roomId: string, 
+    npcData: { name: string; initiative: number; icon: string; color: string; movementRemaining: number }
+) => {
+    const npcId = `npc_${crypto.randomUUID()}`;
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    
+    // We must fetch current encounter to inject the NPC correctly into turn order if active
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    if (!encounter) return;
+
+    const updates: any = {};
+    updates[`npcs/${npcId}`] = { id: npcId, name: npcData.name };
+    updates[`initiatives/${npcId}`] = npcData.initiative;
+    
+    // Add to grid
+    updates[`grid/entities/${npcId}`] = {
+        x: Math.floor(15 / 2),
+        y: Math.floor(15 / 2),
+        icon: npcData.icon,
+        color: npcData.color,
+        isNPC: true,
+        name: npcData.name,
+        movementRemaining: npcData.movementRemaining
+    };
+
+    // If active, recalculate turn order
+    if (encounter.status === 'active') {
+        const currentOrder = encounter.turnOrder || [];
+        // Insert into proper initiative order
+        const allInit = { ...encounter.initiatives, [npcId]: npcData.initiative };
+        const newOrder = [...currentOrder, npcId].sort((a, b) => (allInit[b] || 0) - (allInit[a] || 0));
+        updates[`turnOrder`] = newOrder;
+        
+        // Find new current turn index based on the player ID that was currently acting
+        const currentActorId = currentOrder[encounter.currentTurnIndex];
+        const newCurrentIndex = newOrder.indexOf(currentActorId);
+        updates[`currentTurnIndex`] = newCurrentIndex >= 0 ? newCurrentIndex : 0;
+    }
+
+    await update(encPath, updates);
+    return npcId;
+};
+
+export const removeNPCFromEncounter = async (roomId: string, npcId: string) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    if (!encounter) return;
+
+    const updates: any = {};
+    updates[`npcs/${npcId}`] = null;
+    updates[`initiatives/${npcId}`] = null;
+    updates[`grid/entities/${npcId}`] = null;
+
+    if (encounter.turnOrder) {
+        const newOrder = encounter.turnOrder.filter(id => id !== npcId);
+        updates[`turnOrder`] = newOrder;
+
+        if (encounter.status === 'active') {
+            const currentActorId = encounter.turnOrder[encounter.currentTurnIndex];
+            if (currentActorId === npcId) {
+                // If the removed NPC was acting, move to next
+                let nextIndex = encounter.currentTurnIndex;
+                if (nextIndex >= newOrder.length) nextIndex = 0;
+                updates[`currentTurnIndex`] = nextIndex;
+            } else {
+                const newCurrentIndex = newOrder.indexOf(currentActorId);
+                updates[`currentTurnIndex`] = newCurrentIndex >= 0 ? newCurrentIndex : 0;
+            }
+        }
+    }
+
+    await update(encPath, updates);
 };
 
 // Initial template for a blank character

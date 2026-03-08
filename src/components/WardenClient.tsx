@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, toggleGridState, addNPCToEncounter, removeNPCFromEncounter, setGridBackgroundImage, clearGridBackgroundImage } from "@/lib/database";
 import { RoomData, CharacterSheet, Consequence } from "@/types/character";
-import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload } from "lucide-react";
+import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Globe } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 import { PanicIcon } from "./PanicIcon";
+import { CombatGrid } from "./CombatGrid";
 
 const getTimestamp = () => Date.now();
 
@@ -26,6 +27,14 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         modifier: "disadvantage",
         value: 0,
         isFatal: false
+    });
+
+    const [newNpc, setNewNpc] = useState({
+        name: "",
+        initiative: 10,
+        icon: "👾",
+        color: "text-red-500",
+        movementRemaining: 5
     });
 
     const getCurrentOrder = () => {
@@ -225,6 +234,53 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             roll: 0,
             result: 'Warden Message'
         });
+    };
+
+    const processGridBackgroundImageFile = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new window.Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                // Max dimensions to avoid huge base64 strings
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const base64Data = canvas.toDataURL("image/jpeg", 0.7); // compress quality
+                    setGridBackgroundImage(roomId, base64Data);
+                    pushLog(roomId, {
+                        timestamp: getTimestamp(),
+                        playerName: "SISTEMA",
+                        playerId: "SYSTEM",
+                        statName: 'MAPA TÁTICO: ATUALIZADO',
+                        statValue: 0,
+                        roll: 0,
+                        result: 'Warden Message'
+                    });
+                }
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleUpdate = (playerId: string, path: string, value: string | number | boolean) => {
@@ -494,6 +550,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
     return (
         <main className="max-w-7xl mx-auto flex flex-col gap-8">
+            <CombatGrid roomId={roomId} isWarden={true} />
             <header className="border-b-2 border-emerald-900 pb-4 flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold uppercase tracking-widest text-emerald-400">
@@ -542,6 +599,47 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     )}
                 </div>
 
+                {/* DEDICATED BUTTON FOR COMBAT GRID */}
+                {roomData?.encounter?.isActive && (
+                    <div className="flex flex-col gap-2 border-t border-blue-900/30 pt-4 mt-2">
+                        <div className="flex justify-between items-center gap-4">
+                            <div className="flex flex-col gap-2">
+                                <span className="text-xs font-bold text-amber-500 uppercase tracking-widest block">BACKGROUND DO GRID</span>
+                                <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer bg-amber-950/50 hover:bg-amber-900 text-amber-500 border border-amber-800 px-4 py-1 text-xs font-bold tracking-widest flex items-center gap-2 transition-colors uppercase">
+                                        <Upload size={14} /> NOVO MAPA
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                    processGridBackgroundImageFile(e.target.files[0]);
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                    {roomData.encounter?.grid?.backgroundImage && (
+                                        <button 
+                                            onClick={() => clearGridBackgroundImage(roomId)}
+                                            className="bg-red-950/50 text-red-500 border border-red-900 px-4 py-1 text-xs font-bold uppercase hover:bg-red-900"
+                                        >
+                                            <Trash2 size={14} /> REMOVER
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={() => toggleGridState(roomId, !roomData.encounter?.grid?.isActive)}
+                                className={`px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase border ${roomData.encounter?.grid?.isActive ? 'bg-amber-950 text-amber-500 border-amber-900 hover:bg-amber-900' : 'bg-blue-950/50 text-blue-400 border-blue-800 hover:bg-blue-900'}`}
+                            >
+                                <Globe size={18} /> {roomData.encounter?.grid?.isActive ? 'ESCONDER GRID TÁTICO' : 'EXIBIR GRID TÁTICO'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {roomData?.encounter?.isActive && roomData.encounter.status === 'rolling' && (
                     <div className="bg-blue-950/20 border border-blue-900/30 p-4">
                         <h3 className="text-sm text-blue-600 mb-2 uppercase font-bold tracking-widest">Aguardando Rolagens de Iniciativa</h3>
@@ -565,15 +663,67 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         <div className="text-xs text-blue-700 font-bold uppercase tracking-widest">FILA DE TURNOS (RODADA {roomData.encounter.round})</div>
                         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                             {roomData.encounter.turnOrder.map((pid: string, idx: number) => {
-                                const player = roomData.players[pid];
+                                const isNPC = pid.startsWith('npc_');
+                                const name = isNPC ? roomData.encounter?.npcs?.[pid]?.name : roomData.players[pid]?.name;
                                 const isCurrent = idx === roomData.encounter?.currentTurnIndex;
                                 return (
                                     <div key={pid} className={`shrink-0 flex items-center gap-2 px-4 py-2 border ${isCurrent ? 'bg-blue-900 text-blue-100 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-pulse' : 'bg-zinc-950 text-blue-600/50 border-blue-900/30'}`}>
-                                        <span className="text-xs uppercase font-bold">{idx + 1}. {player?.name || 'DESCONHECIDO'}</span>
+                                        <span className={`text-xs uppercase font-bold ${isNPC ? 'text-red-500' : ''}`}>{idx + 1}. {name || 'DESCONHECIDO'}</span>
                                         <span className="text-xs font-mono opacity-50">[{roomData.encounter?.initiatives?.[pid] || 0}]</span>
                                     </div>
                                 );
                             })}
+                        </div>
+                    </div>
+                )}
+
+                {roomData?.encounter?.isActive && (
+                    <div className="border border-red-900/50 bg-red-950/20 p-4 mt-2">
+                        <h3 className="text-sm text-red-500 mb-2 uppercase font-bold tracking-widest">Adicionar NPC / Ameaça</h3>
+                        <div className="flex flex-wrap gap-2 items-center">
+                            <input 
+                                type="text" 
+                                placeholder="Nome do NPC"
+                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-40"
+                                value={newNpc.name}
+                                onChange={e => setNewNpc(prev => ({...prev, name: e.target.value}))}
+                            />
+                            <label className="text-xs text-red-500/70">INIC:</label>
+                            <input 
+                                type="number" 
+                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-16"
+                                value={newNpc.initiative}
+                                onChange={e => setNewNpc(prev => ({...prev, initiative: parseInt(e.target.value)||0}))}
+                            />
+                            <label className="text-xs text-red-500/70">MOV:</label>
+                            <input 
+                                type="number" 
+                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-16"
+                                value={newNpc.movementRemaining}
+                                onChange={e => setNewNpc(prev => ({...prev, movementRemaining: parseInt(e.target.value)||2}))}
+                            />
+                            <select 
+                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none"
+                                value={newNpc.icon}
+                                onChange={e => setNewNpc(prev => ({...prev, icon: e.target.value}))}
+                            >
+                                <option value="👾">👾 Alien</option>
+                                <option value="💀">💀 Caveira</option>
+                                <option value="🤖">🤖 Bot</option>
+                                <option value="🕷️">🕷️ Aranha</option>
+                                <option value="👤">👤 Silhueta</option>
+                            </select>
+                            <button 
+                                onClick={() => {
+                                    if(newNpc.name.trim()) {
+                                        addNPCToEncounter(roomId, newNpc);
+                                        setNewNpc({name: "", initiative: 10, icon: "👾", color: "text-red-500", movementRemaining: 5});
+                                    }
+                                }}
+                                className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800"
+                            >
+                                INSERIR
+                            </button>
                         </div>
                     </div>
                 )}
