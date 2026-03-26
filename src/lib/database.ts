@@ -181,12 +181,7 @@ export const startEncounter = async (roomId: string) => {
         turnOrder: [],
         currentTurnIndex: 0,
         round: 1,
-        npcs: {},
-        grid: {
-            isActive: false, // Minimized by default, or Warden can activate it
-            movementPerTurn: 5,
-            entities: {}
-        }
+        npcs: {}
     };
     await set(encPath, initialEncounter);
 };
@@ -222,13 +217,6 @@ export const nextTurn = async (roomId: string, encounter: EncounterState) => {
         round: newRound
     };
 
-    // Reset movement for next player if they are on the grid
-    if (encounter.grid?.entities) {
-        const nextPlayerId = encounter.turnOrder[nextIndex];
-        if (encounter.grid.entities[nextPlayerId]) {
-            updates[`grid/entities/${nextPlayerId}/movementRemaining`] = encounter.grid.movementPerTurn || 5;
-        }
-    }
 
     await update(encPath, updates);
 };
@@ -238,41 +226,13 @@ export const endEncounter = async (roomId: string) => {
     await remove(encPath);
 };
 
-export const updateGridMovementSetting = async (roomId: string, movement: number) => {
-    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
-    await update(gridPath, { movementPerTurn: movement });
-};
 
-export const updateGridEntity = async (roomId: string, playerId: string, entityData: { x: number, y: number, icon?: string, movementRemaining?: number }) => {
-    const entityPath = ref(database, `${roomPath(roomId)}/encounter/grid/entities/${playerId}`);
-    await update(entityPath, entityData);
-};
-
-export const removeGridEntity = async (roomId: string, playerId: string) => {
-    const entityPath = ref(database, `${roomPath(roomId)}/encounter/grid/entities/${playerId}`);
-    await remove(entityPath);
-};
-
-export const toggleGridState = async (roomId: string, isActive: boolean) => {
-    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
-    await update(gridPath, { isActive });
-};
-
-export const setGridBackgroundImage = async (roomId: string, base64Image: string) => {
-    const gridPath = ref(database, `${roomPath(roomId)}/encounter/grid`);
-    await update(gridPath, { backgroundImage: base64Image });
-};
-
-export const clearGridBackgroundImage = async (roomId: string) => {
-    const imgPath = ref(database, `${roomPath(roomId)}/encounter/grid/backgroundImage`);
-    await remove(imgPath);
-};
 
 // --- NPC SYSTEM ---
 
 export const addNPCToEncounter = async (
     roomId: string, 
-    npcData: { name: string; initiative: number; icon: string; color: string; movementRemaining: number }
+    npcData: { name: string; initiative: number; icon: string; color: string }
 ) => {
     const npcId = `npc_${crypto.randomUUID()}`;
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
@@ -286,16 +246,6 @@ export const addNPCToEncounter = async (
     updates[`npcs/${npcId}`] = { id: npcId, name: npcData.name };
     updates[`initiatives/${npcId}`] = npcData.initiative;
     
-    // Add to grid
-    updates[`grid/entities/${npcId}`] = {
-        x: Math.floor(15 / 2),
-        y: Math.floor(15 / 2),
-        icon: npcData.icon,
-        color: npcData.color,
-        isNPC: true,
-        name: npcData.name,
-        movementRemaining: npcData.movementRemaining
-    };
 
     // If active, recalculate turn order
     if (encounter.status === 'active') {
@@ -324,7 +274,7 @@ export const removeNPCFromEncounter = async (roomId: string, npcId: string) => {
     const updates: any = {};
     updates[`npcs/${npcId}`] = null;
     updates[`initiatives/${npcId}`] = null;
-    updates[`grid/entities/${npcId}`] = null;
+
 
     if (encounter.turnOrder) {
         const newOrder = encounter.turnOrder.filter(id => id !== npcId);

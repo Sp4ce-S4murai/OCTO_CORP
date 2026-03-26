@@ -84,20 +84,6 @@ export interface EncounterState {
     currentTurnIndex: number;
     round: number;
     npcs?: Record<string, { id: string, name: string }>; // Warden's custom NPCs
-    grid?: {
-        isActive: boolean;
-        movementPerTurn: number;
-        backgroundImage?: string;
-        entities: Record<string, {
-            x: number;
-            y: number;
-            icon: string;
-            movementRemaining: number;
-            color?: string; // e.g. text-red-500
-            isNPC?: boolean;
-            name?: string;
-        }>;
-    };
 }
 
 export interface RoomData {

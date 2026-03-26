@@ -13,7 +13,7 @@ import { EnvironmentPanel } from "./EnvironmentPanel";
 import { PanicIcon } from "./PanicIcon";
 import { EnvironmentState } from "@/types/character";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
-import { CombatGrid } from "./CombatGrid";
+
 
 const VOID_MESSAGES = [
     "Você não está respirando.", "Eles estão te olhando.", "Sua pele não é sua.", "Atrás de você.", "As paredes respiram.",
@@ -424,7 +424,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-8 items-start relative pb-24">
-            <CombatGrid roomId={roomId} isWarden={false} playerId={playerId} />
+
 
             {/* JUMPSCARE OVERLAY */}
             {jumpscareImage && (
