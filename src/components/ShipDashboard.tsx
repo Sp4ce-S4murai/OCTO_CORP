@@ -1,7 +1,7 @@
 "use client";
 
 import { ShipState, AlertSeverity } from "@/types/ship";
-import { AlertTriangle, Shield, Crosshair, Radio, Heart, Fuel, Zap } from "lucide-react";
+import { AlertTriangle, Shield, Crosshair, Radio, Heart, Fuel, Zap, Navigation, Target, Wrench, Eye, Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ShipDashboardProps {
@@ -18,89 +18,83 @@ const SYSTEM_LABELS: Record<string, string> = {
 const SEVERITY_STYLES: Record<AlertSeverity, string> = {
     info:         'border-blue-800 bg-blue-950/30 text-blue-400',
     warning:      'border-amber-800 bg-amber-950/30 text-amber-400',
-    critical:     'border-red-800 bg-red-950/50 text-red-400 animate-pulse',
+    critical:     'border-red-800 bg-red-950/50 text-red-500 animate-pulse',
     catastrophic: 'border-red-500 bg-red-900/80 text-red-100 animate-pulse',
 };
 
-// FTL-style ship segment shapes — a simple schematic using SVG-like CSS borders
 const STATION_SEGMENTS: Record<string, {
     label: string;
-    color: string;
-    borderColor: string;
-    gridArea: string;
     system: string;
-    icon: string;
+    icon: React.ReactNode;
 }> = {
-    bridge:      { label: 'PONTE',      color: 'blue',   borderColor: 'border-blue-700',   gridArea: 'bridge',      system: 'sensors',     icon: '🔭' },
-    tactical:    { label: 'TÁTICO',     color: 'red',    borderColor: 'border-red-700',    gridArea: 'tactical',    system: 'weapons',     icon: '🎯' },
-    engineering: { label: 'ENGENHARIA', color: 'amber',  borderColor: 'border-amber-700',  gridArea: 'engineering', system: 'propulsion',  icon: '⚙️' },
-    science:     { label: 'CIÊNCIA',    color: 'purple', borderColor: 'border-purple-700', gridArea: 'science',     system: 'lifeSupport', icon: '🔬' },
+    bridge:      { label: 'COMANDO',    system: 'sensors',     icon: <Navigation size={14} /> },
+    tactical:    { label: 'TÁTICO',     system: 'weapons',     icon: <Target size={14} /> },
+    science:     { label: 'CIÊNCIA',    system: 'lifeSupport', icon: <Eye size={14} /> },
+    engineering: { label: 'ENGENHARIA', system: 'propulsion',  icon: <Wrench size={14} /> },
 };
 
-const COLOR_MAP: Record<string, { text: string; bg: string; border: string; glow: string }> = {
-    blue:   { text: 'text-blue-300',   bg: 'bg-blue-950/40',   border: 'border-blue-700',   glow: 'shadow-blue-900/40' },
-    red:    { text: 'text-red-300',    bg: 'bg-red-950/40',    border: 'border-red-700',    glow: 'shadow-red-900/40' },
-    amber:  { text: 'text-amber-300',  bg: 'bg-amber-950/40',  border: 'border-amber-700',  glow: 'shadow-amber-900/40' },
-    purple: { text: 'text-purple-300', bg: 'bg-purple-950/40', border: 'border-purple-700', glow: 'shadow-purple-900/40' },
-};
-
-function StationRoom({ segKey, seg, ship, className }: { segKey: string; seg: typeof STATION_SEGMENTS[string]; ship: ShipState; className?: string }) {
+function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; seg: typeof STATION_SEGMENTS[string]; ship: ShipState; className?: string }) {
     const station = (ship.stations || {})[segKey];
-    const cm = COLOR_MAP[seg.color];
     const sysState = ship.systems[seg.system as keyof typeof ship.systems];
     const occupants = station?.occupants ? Object.values(station.occupants) : [];
-    const hasAnyActed = occupants.some(o => o.hasActed);
-    const allActed = occupants.length > 0 && occupants.every(o => o.hasActed);
-    const crewBonus = occupants.length >= 3 ? '+++ TRIPULAÇÃO COMPLETA' : occupants.length === 2 ? '++ SUPORTE ADICIONAL' : '';
+    const crewBonus = occupants.length >= 3 ? 'EFICIÊNCIA MÁXIMA' : occupants.length === 2 ? 'SUPORTE ATIVO' : '';
+
+    const isOffline = sysState?.status === 'offline';
+    const isDamaged = sysState?.status === 'damaged';
+
+    const statusBorder = isOffline ? 'border-red-800' : isDamaged ? 'border-amber-800/80' : 'border-emerald-900/40';
+    const statusBg = isOffline ? 'bg-red-950/20' : isDamaged ? 'bg-amber-950/10' : 'bg-transparent';
+    const textTheme = isOffline ? 'text-red-500' : isDamaged ? 'text-amber-500' : 'text-emerald-500';
 
     return (
-        <div className={`relative border-2 ${cm.border} ${cm.bg} p-3 shadow-lg ${cm.glow} flex flex-col gap-2 min-h-[100px] overflow-hidden ${className}`}>
-            {/* Corner labels */}
-            <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{seg.icon}</span>
-                    <span className={`text-[10px] font-bold tracking-widest uppercase ${cm.text}`}>{seg.label}</span>
+        <div className={`relative border ${statusBorder} ${statusBg} p-2 flex flex-col min-h-[90px] ${className}`}>
+            {/* Scanline background overlay */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,255,100,0.02)_50%)] bg-[length:100%_4px] pointer-events-none" />
+
+            <div className={`flex items-center justify-between border-b ${statusBorder} pb-1 mb-2`}>
+                <div className={`flex items-center gap-1.5 ${textTheme}`}>
+                    {seg.icon}
+                    <span className="text-[10px] font-bold tracking-[0.2em] uppercase">{seg.label}</span>
                 </div>
-                {/* System status LED */}
-                <div
-                    className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${sysState?.status === 'online' ? 'bg-emerald-500 text-emerald-500' : sysState?.status === 'damaged' ? 'bg-amber-500 text-amber-500 animate-pulse' : 'bg-red-600 text-red-600 animate-pulse'}`}
-                    title={`${SYSTEM_LABELS[seg.system]}: ${sysState?.integrity}%`}
-                />
+                {!isOffline && (
+                    <span className={`text-[9px] font-mono ${isDamaged ? 'text-amber-500 animate-pulse' : 'text-emerald-700'}`}>
+                        {sysState?.integrity}%
+                    </span>
+                )}
             </div>
 
-            {/* Occupants list */}
-            <div className="flex flex-col gap-1 flex-1 relative z-10 mt-1">
+            <div className="flex flex-col gap-1 z-10">
                 {occupants.length === 0 ? (
-                    <span className="text-[9px] text-zinc-600 uppercase tracking-widest font-bold text-center mt-2">— VAGO —</span>
+                    <span className="text-[9px] text-zinc-600 uppercase tracking-widest font-mono pt-2 opacity-50">[/ VAGO /]</span>
                 ) : (
                     occupants.map(occ => (
-                        <div key={occ.playerId} className="flex items-center gap-1.5 bg-black/40 px-2 py-1 rounded">
-                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${occ.hasActed ? 'bg-emerald-500 shadow-[0_0_5px_theme(colors.emerald.500)]' : 'bg-zinc-600'}`} />
-                            <span className={`text-[9.5px] font-bold uppercase truncate ${occ.hasActed ? 'text-emerald-500 line-through' : 'text-zinc-200'}`}>
+                        <div key={occ.playerId} className="flex items-center gap-2">
+                            <div className={`w-1 h-2 ${occ.hasActed ? 'bg-emerald-600' : 'bg-zinc-600'}`} />
+                            <span className={`text-[10px] uppercase font-mono tracking-wider ${occ.hasActed ? 'text-emerald-700 opacity-60' : 'text-emerald-400'}`}>
                                 {occ.playerName}
                             </span>
-                            {occ.hasActed && <span className="text-[8px] text-emerald-700 ml-auto font-bold tracking-widest">OK</span>}
                         </div>
                     ))
                 )}
             </div>
 
-            {/* Crew bonus badge */}
-            {crewBonus && (
-                <div className={`text-[8px] font-bold uppercase tracking-widest ${cm.text} opacity-70 relative z-10 text-center mt-auto pt-2`}>
-                    {crewBonus}
+            {crewBonus && !isOffline && (
+                <div className="mt-auto pt-2 text-[8px] tracking-[0.3em] font-mono text-emerald-600 uppercase">
+                    » {crewBonus}
                 </div>
             )}
 
-            {/* System offline overlay */}
-            {sysState?.status === 'offline' && (
-                <div className="absolute inset-0 bg-red-950/80 flex items-center justify-center border-2 border-red-500 z-20 backdrop-blur-sm">
-                    <span className="text-xs font-bold text-red-400 uppercase tracking-[0.3em] shadow-red-900 drop-shadow-lg flex flex-col items-center gap-1">
-                        <AlertTriangle size={24} className="mb-1" />
+            {isOffline && (
+                <div className="absolute inset-0 flex items-center justify-center bg-red-950/80 pointer-events-none z-20 border border-red-500/50 backdrop-blur-[1px]">
+                    <span className="text-xs font-bold font-mono tracking-[0.4em] text-red-500 uppercase animate-pulse">
                         OFFLINE
                     </span>
                 </div>
             )}
+            
+            {/* Corner deco */}
+            <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${statusBorder} -translate-x-[1px] -translate-y-[1px]`} />
+            <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${statusBorder} translate-x-[1px] translate-y-[1px]`} />
         </div>
     );
 }
@@ -119,166 +113,154 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
         setPrevHp(ship.hp.current);
     }, [ship.hp.current]);
 
-    const hpColor = hpPercent <= 25 ? 'bg-red-600' : hpPercent <= 50 ? 'bg-amber-500' : 'bg-emerald-500';
+    const isCritical = hpPercent <= 25;
+    const hpColor = isCritical ? 'bg-red-600' : hpPercent <= 50 ? 'bg-amber-500' : 'bg-emerald-500';
     const alerts = ship.alerts
         ? Object.values(ship.alerts).sort((a, b) => b.timestamp - a.timestamp).slice(0, 3)
         : [];
 
     return (
-        <section className={`border-2 ${hpPercent <= 25 ? 'border-red-600' : hpPercent <= 50 ? 'border-amber-700' : 'border-cyan-900'} bg-zinc-950/95 transition-all duration-300 relative overflow-hidden ${flashDamage ? 'ring-4 ring-red-500/60' : ''}`}>
-            {flashDamage && <div className="absolute inset-0 bg-red-900/30 pointer-events-none z-10 animate-pulse" />}
+        <section className={`border border-zinc-800 bg-[#0a0f0d] transition-all duration-300 relative overflow-hidden font-mono ${flashDamage ? 'ring-2 ring-red-500/50' : ''}`}>
+            {flashDamage && <div className="absolute inset-0 bg-red-900/20 pointer-events-none z-10 animate-pulse" />}
 
-            {/* TOP HEADER BAR */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-cyan-900/50 bg-zinc-900/60">
-                <div className="flex items-center gap-2">
-                    <Shield size={16} className="text-cyan-500" />
-                    <span className="text-xs font-bold tracking-[0.25em] text-cyan-400 uppercase">{ship.name}</span>
-                    <span className="text-[10px] tracking-widest text-cyan-700 uppercase">// {ship.class}</span>
+            {/* HEADER BAR */}
+            <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-800">
+                <div className="flex items-center gap-3">
+                    <Activity size={16} className={isCritical ? "text-red-500 animate-pulse" : "text-emerald-500"} />
+                    <span className="text-[11px] font-bold tracking-[0.3em] text-emerald-400 uppercase">{ship.name}</span>
+                    <span className="text-[9px] tracking-widest text-emerald-800 uppercase hidden sm:inline">| {ship.class}</span>
                 </div>
                 <div className="flex items-center gap-4">
                     {ship.combat?.isActive && (
                         <div className="flex items-center gap-2 border border-red-900/50 bg-red-950/20 px-3 py-1">
                             <Crosshair size={11} className="text-red-500 animate-pulse" />
-                            <span className="text-[10px] font-bold tracking-widest uppercase text-red-400">
-                                COMBATE — R{ship.combat.round} — {ship.combat.phase === 'stations' ? 'AÇÕES' : ship.combat.phase === 'resolution' ? 'RESOLUÇÃO' : 'DANO'}
+                            <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-red-500">
+                                COMBATE ACIONADO [ R{ship.combat.round} ]
                             </span>
                         </div>
                     )}
-                    <span className={`text-[11px] font-bold font-mono ${hpPercent <= 25 ? 'text-red-400 animate-pulse' : hpPercent <= 50 ? 'text-amber-400' : 'text-cyan-400'}`}>
-                        HP {ship.hp.current}/{ship.hp.max}
-                    </span>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-0">
-                {/* LEFT: FTL SHIP DIAGRAM */}
-                <div className="p-4 flex flex-col gap-3">
-                    {/* Hull bar */}
-                    <div>
-                        <div className="flex justify-between text-[9px] font-bold tracking-widest uppercase mb-1">
-                            <span className={hpPercent <= 25 ? 'text-red-500' : hpPercent <= 50 ? 'text-amber-500' : 'text-cyan-600'}>INTEGRIDADE DO CASCO</span>
-                            <span className={hpPercent <= 25 ? 'text-red-500' : hpPercent <= 50 ? 'text-amber-400' : 'text-cyan-600'}>{Math.round(hpPercent)}%</span>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-0">
+                {/* ---------- LEFT: WIREFRAME HULL SCHEMATIC ---------- */}
+                <div className="p-6 relative flex flex-col items-center justify-center min-h-[340px]">
+                    {/* Background Grid */}
+                    <div className="absolute inset-0 pointer-events-none opacity-10" style={{ backgroundImage: 'linear-gradient(#00ff66 1px, transparent 1px), linear-gradient(90deg, #00ff66 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+
+                    <div className="relative w-full max-w-[400px] flex flex-col gap-3">
+                        {/* Upper Hull (Bridge) */}
+                        <div className="flex justify-center">
+                            <BlueprintRoom segKey="bridge" seg={STATION_SEGMENTS.bridge} ship={ship} className="w-[180px] border-t-2 border-emerald-900" />
                         </div>
-                        <div className={`h-2.5 bg-zinc-900 border ${hpPercent <= 25 ? 'border-red-800' : 'border-cyan-900/40'} overflow-hidden`}>
+
+                        {/* Mid Hull (Tactical + Science) */}
+                        <div className="flex justify-between gap-3 relative">
+                            {/* Connector Line */}
+                            <div className="absolute top-1/2 left-0 right-0 h-px bg-emerald-900/30 border-y border-dashed border-emerald-900/20 -z-10" />
+                            
+                            <BlueprintRoom segKey="tactical" seg={STATION_SEGMENTS.tactical} ship={ship} className="flex-1" />
+                            <BlueprintRoom segKey="science" seg={STATION_SEGMENTS.science} ship={ship} className="flex-1" />
+                        </div>
+
+                        {/* Lower Hull (Engineering) */}
+                        <div className="flex justify-center">
+                            <BlueprintRoom segKey="engineering" seg={STATION_SEGMENTS.engineering} ship={ship} className="w-[240px] border-b-2 border-emerald-900" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* ---------- RIGHT: HUD DATA ---------- */}
+                <div className="border-l border-zinc-800 bg-[#050806] flex flex-col z-10">
+                    
+                    {/* HULL INTEGRITY (Top priority) */}
+                    <div className="p-4 border-b border-zinc-800 bg-zinc-950">
+                        <div className="flex justify-between text-[10px] tracking-[0.2em] uppercase mb-2">
+                            <span className="text-zinc-500">CANAL-HULL</span>
+                            <span className={isCritical ? 'text-red-500 animate-pulse' : 'text-emerald-500'}>
+                                {ship.hp.current}/{ship.hp.max}
+                            </span>
+                        </div>
+                        <div className="h-4 bg-zinc-900 border border-zinc-800 p-0.5">
                             <div className={`h-full ${hpColor} transition-all duration-700 relative`} style={{ width: `${hpPercent}%` }}>
-                                {hpPercent <= 50 && <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,transparent,transparent_3px,rgba(0,0,0,0.25)_3px,rgba(0,0,0,0.25)_6px)]" />}
+                                <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.3)_4px,rgba(0,0,0,0.3)_8px)]" />
                             </div>
                         </div>
                     </div>
 
-                    {/* FTL SHIP DIAGRAM — Top-down schematic */}
-                    <div className="relative flex flex-col items-center gap-2 p-6 min-w-[300px]">
-                        {/* Hull Outline Silhouette */}
-                        <div className="absolute inset-0 mt-2 mb-2 max-w-[260px] mx-auto bg-cyan-950/10 border-2 border-cyan-900/30 rounded-t-[140px] rounded-b-3xl pointer-events-none" />
-                        
-                        <div className="absolute top-1/2 bottom-0 left-1/2 w-[80px] -ml-[40px] bg-cyan-950/10 border-x-2 border-cyan-900/30 pointer-events-none" />
-
-                        {/* BRIDGE (Top Center) */}
-                        <StationRoom 
-                            segKey="bridge" seg={STATION_SEGMENTS.bridge} ship={ship} 
-                            className="w-full max-w-[160px] rounded-t-[60px] border-b-0 pb-6 shadow-[inset_0_20px_20px_rgba(0,0,0,0.5)] z-10" 
-                        />
-
-                        {/* MIDDLE ROW (Tactical & Science) */}
-                        <div className="flex w-full max-w-[280px] justify-between gap-12 z-10 -mt-2">
-                            {/* Connector horizontal */}
-                            <div className="absolute top-[130px] left-1/2 w-[160px] -ml-[80px] h-8 bg-zinc-950 border-y-2 border-cyan-900/30 -z-10" />
-
-                            <StationRoom 
-                                segKey="tactical" seg={STATION_SEGMENTS.tactical} ship={ship} 
-                                className="w-1/2 rounded-l-xl border-r-0" 
-                            />
-                            <StationRoom 
-                                segKey="science" seg={STATION_SEGMENTS.science} ship={ship} 
-                                className="w-1/2 rounded-r-xl border-l-0" 
-                            />
+                    <div className="p-4 flex flex-col gap-6 flex-1">
+                        {/* NOISE/STATS BLOCK */}
+                        <div>
+                            <span className="text-[9px] text-zinc-600 tracking-[0.3em] uppercase block mb-3 border-b border-zinc-800 pb-1">/ PARAMETROS BASE</span>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-3">
+                                {[
+                                    { k: 'armor', lbl: 'AR', color: 'text-emerald-400' },
+                                    { k: 'combat', lbl: 'CBT', color: 'text-emerald-400' },
+                                    { k: 'speed', lbl: 'SPD', color: 'text-emerald-400' },
+                                    { k: 'sensors', lbl: 'SNS', color: 'text-emerald-400' }
+                                ].map(s => (
+                                    <div key={s.k} className="flex justify-between items-end border-b border-dashed border-zinc-800 pb-0.5">
+                                        <span className="text-[10px] text-zinc-500">{s.lbl}</span>
+                                        <span className={`text-sm ${s.color}`}>{ship.stats[s.k as keyof typeof ship.stats]}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
-                        {/* ENGINEERING (Bottom Center) */}
-                        <StationRoom 
-                            segKey="engineering" seg={STATION_SEGMENTS.engineering} ship={ship} 
-                            className="w-full max-w-[220px] rounded-b-xl border-t-0 pt-6 shadow-[inset_0_-20px_20px_rgba(0,0,0,0.5)] z-10 mt-2" 
-                        />
-                    </div>
-                </div>
-
-                {/* RIGHT: STATS + SYSTEMS + RESOURCES */}
-                <div className="border-l border-cyan-900/30 bg-zinc-900/30 p-4 flex flex-col gap-4 min-w-[220px]">
-                    {/* Ship Stats */}
-                    <div>
-                        <h4 className="text-[9px] font-bold tracking-[0.2em] uppercase text-cyan-700 mb-2">ATRIBUTOS DA NAVE</h4>
-                        <div className="grid grid-cols-2 gap-1.5">
-                            {[
-                                { label: 'ARMADURA', key: 'armor', color: 'text-cyan-400' },
-                                { label: 'COMBATE', key: 'combat', color: 'text-red-400' },
-                                { label: 'VELOCIDADE', key: 'speed', color: 'text-blue-400' },
-                                { label: 'SENSORES', key: 'sensors', color: 'text-purple-400' },
-                            ].map(s => (
-                                <div key={s.key} className="flex flex-col bg-zinc-950 border border-zinc-800 p-2">
-                                    <span className="text-[8px] text-zinc-600 uppercase tracking-widest">{s.label}</span>
-                                    <span className={`text-xl font-bold font-mono ${s.color}`}>
-                                        {ship.stats[s.key as keyof typeof ship.stats]}
-                                    </span>
-                                </div>
-                            ))}
+                        {/* SYSTEMS BLOCK */}
+                        <div>
+                            <span className="text-[9px] text-zinc-600 tracking-[0.3em] uppercase block mb-3 border-b border-zinc-800 pb-1">/ SUBSISTEMAS PRINC.</span>
+                            <div className="flex flex-col gap-2">
+                                {Object.entries(ship.systems).map(([key, sys]) => {
+                                    const stCol = sys.status === 'online' ? 'text-emerald-500' : sys.status === 'damaged' ? 'text-amber-500' : 'text-red-500';
+                                    const barBg = sys.status === 'online' ? 'bg-emerald-600/50' : sys.status === 'damaged' ? 'bg-amber-600/50' : 'bg-red-600/50';
+                                    
+                                    return (
+                                        <div key={key}>
+                                            <div className="flex justify-between text-[9px] mb-1">
+                                                <span className={`${stCol} opacity-80 uppercase tracking-widest`}>{SYSTEM_LABELS[key]}</span>
+                                                <span className={stCol}>{sys.integrity}%</span>
+                                            </div>
+                                            <div className="w-full h-1 bg-zinc-900">
+                                                <div className={`h-full ${barBg} transition-all`} style={{ width: `${sys.integrity}%` }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Systems */}
-                    <div>
-                        <h4 className="text-[9px] font-bold tracking-[0.2em] uppercase text-cyan-700 mb-2">SUBSISTEMAS</h4>
-                        <div className="flex flex-col gap-1">
-                            {Object.entries(ship.systems).map(([key, sys]) => (
-                                <div key={key} className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sys.status === 'online' ? 'bg-emerald-500' : sys.status === 'damaged' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-pulse'}`} />
-                                        <span className="text-[9px] uppercase tracking-wider truncate text-zinc-400">{SYSTEM_LABELS[key]}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <div className="w-16 h-1 bg-zinc-800 overflow-hidden">
-                                            <div className={`h-full transition-all ${sys.status === 'online' ? 'bg-emerald-500' : sys.status === 'damaged' ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${sys.integrity}%` }} />
+                        {/* RESOURCES BLOCK */}
+                        <div className="mt-auto">
+                            <span className="text-[9px] text-zinc-600 tracking-[0.3em] uppercase block mb-3 border-b border-zinc-800 pb-1">/ SUPRIMENTOS</span>
+                            <div className="flex gap-4">
+                                {[
+                                    { k: 'fuel', lbl: 'FUEL', c: 'text-amber-500' },
+                                    { k: 'oxygen', lbl: 'O2', c: 'text-cyan-500' },
+                                    { k: 'ammo', lbl: 'AMMO', c: 'text-red-500' }
+                                ].map(r => {
+                                    const res = ship.resources[r.k as keyof typeof ship.resources];
+                                    return (
+                                        <div key={r.k} className="flex flex-col">
+                                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest">{r.lbl}</span>
+                                            <span className={`text-xs ${res.current <= res.max * 0.2 ? 'animate-pulse text-red-500' : r.c}`}>
+                                                {res.current}
+                                            </span>
                                         </div>
-                                        <span className={`text-[9px] font-mono w-7 text-right ${sys.status === 'offline' ? 'text-red-500' : sys.status === 'damaged' ? 'text-amber-500' : 'text-zinc-500'}`}>{sys.integrity}%</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Resources */}
-                    <div>
-                        <h4 className="text-[9px] font-bold tracking-[0.2em] uppercase text-cyan-700 mb-2">RECURSOS</h4>
-                        <div className="flex flex-col gap-1.5">
-                            {[
-                                { label: 'COMBUSTÍVEL', key: 'fuel', color: 'bg-amber-500', textColor: 'text-amber-400' },
-                                { label: 'OXIGÊNIO', key: 'oxygen', color: 'bg-cyan-500', textColor: 'text-cyan-400' },
-                                { label: 'MUNIÇÃO', key: 'ammo', color: 'bg-red-500', textColor: 'text-red-400' },
-                            ].map(r => {
-                                const res = ship.resources[r.key as keyof typeof ship.resources];
-                                const pct = res.max > 0 ? (res.current / res.max) * 100 : 0;
-                                return (
-                                    <div key={r.key}>
-                                        <div className="flex justify-between text-[9px] mb-0.5">
-                                            <span className="text-zinc-600 uppercase tracking-widest">{r.label}</span>
-                                            <span className={`font-mono ${pct <= 20 ? 'text-red-500 animate-pulse' : r.textColor}`}>{res.current}/{res.max}</span>
-                                        </div>
-                                        <div className="h-1 bg-zinc-900 border border-zinc-800 overflow-hidden">
-                                            <div className={`h-full ${pct <= 20 ? 'bg-red-600' : r.color} transition-all`} style={{ width: `${pct}%` }} />
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* ALERT BANNER */}
+            {/* ALERT BANNER - BOTTOM */}
             {alerts.length > 0 && (
-                <div className="border-t border-zinc-800 flex flex-col gap-px">
+                <div className="border-t border-zinc-800 bg-[#050806]">
                     {alerts.map(alert => (
-                        <div key={alert.id} className={`flex items-center gap-2 px-4 py-1.5 border-b border-zinc-900 text-[10px] font-bold tracking-widest uppercase ${SEVERITY_STYLES[alert.severity]}`}>
-                            <AlertTriangle size={11} className="flex-shrink-0" />
+                        <div key={alert.id} className={`flex items-center gap-3 px-4 py-2 text-[10px] font-bold tracking-[0.2em] border-b border-zinc-900/50 uppercase ${SEVERITY_STYLES[alert.severity]}`}>
+                            <AlertTriangle size={12} className="flex-shrink-0" />
                             <span className="truncate">{alert.message}</span>
                         </div>
                     ))}
