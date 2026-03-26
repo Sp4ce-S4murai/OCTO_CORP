@@ -239,6 +239,38 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     // Crew count at current station (for bonus display)
     const crewAtMyStation = myStation?.occupants ? Object.values(myStation.occupants).length : 0;
 
+    const getSkillBonus = (skillNames: string[]): number => {
+        let maxBonus = 0;
+        const allSkills = [
+            ...Object.values(character?.skills?.trained || {}),
+            ...Object.values(character?.skills?.expert || {}),
+            ...Object.values(character?.skills?.master || {})
+        ];
+        for (const skill of allSkills) {
+            if (skillNames.includes(skill.name)) {
+                const match = skill.tier.match(/\+(\d+)/);
+                const bonus = match ? parseInt(match[1]) : 10;
+                if (bonus > maxBonus) maxBonus = bonus;
+            }
+        }
+        return maxBonus;
+    };
+
+    const pilotSkill = getSkillBonus(['Pilotagem', 'Atléticos']);
+    const gunnerSkill = getSkillBonus(['Armas de Fogo', 'Tática e Estratégia']);
+    const engineerSkill = getSkillBonus(['Engenharia', 'Reparos', 'Computação']);
+    const scienceSkill = getSkillBonus(['Computação', 'Física Xenobiologia']);
+
+    const enemiesOut = ship.enemies ? Object.values(ship.enemies) : [];
+    const primaryEnemy = enemiesOut[0];
+    const enemyAR = primaryEnemy ? primaryEnemy.stats.armor : 0;
+
+    const pilotTarget = Math.min(99, ship.stats.speed + pilotSkill + (crewAtMyStation >= 2 ? 10 : 0));
+    const gunnerTarget = Math.max(1, ship.stats.combat + gunnerSkill - Math.floor(enemyAR / 5));
+    const engineerTarget = Math.min(99, character.stats.intellect + engineerSkill);
+    const scienceTarget = Math.min(99, ship.stats.sensors + scienceSkill);
+
+
     // d100 roll helper
     const doRoll = (targetValue: number) => {
         const useInput = rollInput.trim();
@@ -258,8 +290,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
 
     // --- PILOT ---
     const handleEvade = async () => {
-        const crewBonus = crewAtMyStation >= 3 ? 0 : crewAtMyStation >= 2 ? 10 : 0; // bonus via second roll or +10
-        const target = Math.min(99, ship.stats.speed + crewBonus);
+        const target = pilotTarget;
         let { roll, isHit, isCritical } = doRoll(target);
         // If 3+ crew: roll again and take best
         if (crewAtMyStation >= 3) {
@@ -279,10 +310,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         const weapon = ship.weapons[selectedWeaponId];
         if (!weapon || weapon.currentCooldown > 0) return;
         if (ship.resources.ammo.current < weapon.ammoCost) return;
-        const enemies = ship.enemies ? Object.values(ship.enemies) : [];
-        const primaryEnemy = enemies[0];
-        const enemyAR = primaryEnemy ? primaryEnemy.stats.armor : 0;
-        const target = Math.max(1, ship.stats.combat - Math.floor(enemyAR / 5));
+        const target = gunnerTarget;
         const { roll, isHit, isCritical } = doRoll(target);
         const result = isHit ? (isCritical ? 'critical_success' : 'success') : (isCritical ? 'critical_failure' : 'failure');
         let damage = 0;
@@ -299,7 +327,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
 
     // --- ENGINEER ---
     const handleRepair = async (systemKey: string) => {
-        const target = character.stats.intellect;
+        const target = engineerTarget;
         const { roll, isHit, isCritical } = doRoll(target);
         const baseRepair = crewAtMyStation >= 2 ? 40 : 20;
         const repairAmount = isHit ? (isCritical ? baseRepair * 2 : baseRepair) : 0;
@@ -312,7 +340,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     // --- SCIENCE ---
     const handleScan = async () => {
         const autoScan = crewAtMyStation >= 2 && ship.stats.sensors > 40;
-        const target = ship.stats.sensors;
+        const target = scienceTarget;
         const { roll, isHit } = autoScan ? { roll: 1, isHit: true } : doRoll(target);
         if (isHit && ship.enemies) {
             const unrevealed = Object.values(ship.enemies).filter(e => !e.revealed);
@@ -450,7 +478,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {stationRole === 'pilot' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-2">
                     <div className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">
-                        SPD: {ship.stats.speed}{crewAtMyStation >= 2 ? ' +10 (CO-PILOTO)' : ''} | COMB: {ship.resources.fuel.current}
+                        ALVO EVASÃO: ≤{pilotTarget} | (SPD:{ship.stats.speed} + SKILL:{pilotSkill} {crewAtMyStation >= 2 ? '+ CREW:10' : ''}) | COMBUSTÍVEL: {ship.resources.fuel.current}
                     </div>
                     <button onClick={handleEvade}
                         className="bg-blue-950/50 hover:bg-blue-900 text-blue-400 border border-blue-800 px-4 py-3 font-bold tracking-widest flex items-center justify-center gap-2 transition upper text-xs">
@@ -463,7 +491,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {stationRole === 'gunner' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-red-600 font-bold uppercase tracking-widest">
-                        CBT: {ship.stats.combat} | MUN: {ship.resources.ammo.current}
+                        ALVO DISPARO: ≤{gunnerTarget} | (CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}) | MUN: {ship.resources.ammo.current}
                     </div>
                     <div className="flex flex-col gap-1.5">
                         {Object.entries(ship.weapons).map(([wId, weapon]) => (
@@ -487,7 +515,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {stationRole === 'engineer' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">
-                        INTELECTO: {character.stats.intellect} | REPARO: +{crewAtMyStation >= 2 ? '40' : '20'}% por acerto
+                        ALVO REPARO: ≤{engineerTarget} | (INT:{character.stats.intellect} + SKILL:{engineerSkill}) | RECUPERAÇÃO: +{crewAtMyStation >= 2 ? '40' : '20'}%
                     </div>
                     <div className="flex flex-col gap-1.5">
                         {Object.entries(ship.systems).map(([key, sys]) => (
@@ -511,7 +539,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {stationRole === 'science' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-purple-600 font-bold uppercase tracking-widest">
-                        SNS: {ship.stats.sensors}{crewAtMyStation >= 2 && ship.stats.sensors > 40 ? ' — SCAN AUTOMÁTICO ATIVO' : ''}
+                        ALVO SCAN: ≤{scienceTarget} | (SNS:{ship.stats.sensors} + SKILL:{scienceSkill}) {crewAtMyStation >= 2 && ship.stats.sensors > 40 ? '— SCAN AUTOMÁTICO ATIVO' : ''}
                     </div>
                     {ship.enemies && Object.values(ship.enemies).map(enemy => (
                         <div key={enemy.id} className={`border px-3 py-2 ${enemy.revealed ? 'border-purple-700 bg-purple-950/20' : 'border-zinc-800 bg-zinc-900/50'}`}>

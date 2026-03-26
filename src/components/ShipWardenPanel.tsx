@@ -16,6 +16,7 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
     const [customName, setCustomName] = useState("");
     const [selectedEnemyPreset, setSelectedEnemyPreset] = useState<string>(Object.keys(ENEMY_PRESETS)[0]);
     const [manualDamage, setManualDamage] = useState("");
+    const [damageTarget, setDamageTarget] = useState("hull");
     const [drainAmount, setDrainAmount] = useState("10");
 
     const handleCreateShip = () => {
@@ -63,7 +64,13 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
     const handleApplyDamage = () => {
         const dmg = parseInt(manualDamage);
         if (isNaN(dmg) || dmg <= 0) return;
-        applyShipDamage(roomId, dmg, "Dano Manual do Diretor");
+        
+        if (damageTarget === 'hull') {
+            applyShipDamage(roomId, dmg, "Dano Aberto no Casco");
+        } else {
+            damageSystem(roomId, damageTarget, dmg);
+        }
+        
         setManualDamage("");
     };
 
@@ -215,17 +222,30 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
                 ))}
             </div>
 
-            {/* MANUAL DAMAGE */}
+            {/* MANUAL TARGETED DAMAGE & DRAIN */}
             <div className="flex flex-wrap gap-4">
-                <div className="border border-red-900/30 bg-red-950/10 p-4 flex-1 min-w-[250px]">
-                    <h3 className="text-xs font-bold tracking-widest text-red-500 uppercase mb-2 flex items-center gap-2">
-                        <Zap size={14} /> DANO MANUAL NO CASCO
+                <div className="border border-red-900/30 bg-red-950/10 p-4 flex-1 min-w-[300px]">
+                    <h3 className="text-xs font-bold tracking-widest text-red-500 uppercase mb-3 flex items-center gap-2">
+                        <Zap size={14} /> DANO DIRECIONADO
                     </h3>
                     <div className="flex gap-2">
                         <input type="number" placeholder="Dano" value={manualDamage} onChange={e => setManualDamage(e.target.value)}
                             className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-20" />
-                        <button onClick={handleApplyDamage}
-                            className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800">
+                        
+                        <select
+                            value={damageTarget}
+                            onChange={e => setDamageTarget(e.target.value)}
+                            className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none flex-1 font-mono uppercase text-[10px]"
+                        >
+                            <option value="hull">CASCO PRINCIPAL (HP)</option>
+                            <option value="propulsion">SIST. PROPULSÃO</option>
+                            <option value="weapons">SIST. ARMAMENTO</option>
+                            <option value="sensors">SIST. SENSORES</option>
+                            <option value="lifeSupport">SUPORTE DE VIDA (O2)</option>
+                        </select>
+
+                        <button onClick={handleApplyDamage} disabled={!manualDamage}
+                            className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800 disabled:opacity-30 disabled:cursor-not-allowed border border-red-700">
                             APLICAR
                         </button>
                     </div>
@@ -238,25 +258,10 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
                     <div className="flex gap-2 items-center flex-wrap">
                         <input type="number" placeholder="Qtd" value={drainAmount} onChange={e => setDrainAmount(e.target.value)}
                             className="bg-zinc-950 border border-amber-900/50 text-amber-300 p-2 text-sm outline-none w-16" />
-                        <button onClick={() => handleDrainResource('fuel')} className="bg-amber-900/50 text-[10px] px-3 py-2 text-amber-200 font-bold uppercase hover:bg-amber-800">COMB</button>
-                        <button onClick={() => handleDrainResource('oxygen')} className="bg-cyan-900/50 text-[10px] px-3 py-2 text-cyan-200 font-bold uppercase hover:bg-cyan-800">O₂</button>
-                        <button onClick={() => handleDrainResource('ammo')} className="bg-red-900/50 text-[10px] px-3 py-2 text-red-200 font-bold uppercase hover:bg-red-800">MUN</button>
+                        <button onClick={() => handleDrainResource('fuel')} className="bg-amber-900/50 text-[10px] px-3 py-2 text-amber-200 font-bold uppercase hover:bg-amber-800 border border-amber-700">COMB</button>
+                        <button onClick={() => handleDrainResource('oxygen')} className="bg-cyan-900/50 text-[10px] px-3 py-2 text-cyan-200 font-bold uppercase hover:bg-cyan-800 border border-cyan-700">O₂</button>
+                        <button onClick={() => handleDrainResource('ammo')} className="bg-red-900/50 text-[10px] px-3 py-2 text-red-200 font-bold uppercase hover:bg-red-800 border border-red-700">MUN</button>
                     </div>
-                </div>
-            </div>
-
-            {/* SYSTEM DAMAGE */}
-            <div className="border border-purple-900/30 bg-purple-950/10 p-4">
-                <h3 className="text-xs font-bold tracking-widest text-purple-400 uppercase mb-2 flex items-center gap-2">
-                    <Wrench size={14} /> DANIFICAR SUBSISTEMA (-40% INTEGRIDADE)
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                    {Object.entries(SYSTEM_NAMES).map(([key, name]) => (
-                        <button key={key} onClick={() => damageSystem(roomId, key, 40)}
-                            className={`text-[10px] px-3 py-2 font-bold uppercase transition border ${ship.systems[key as keyof typeof ship.systems]?.status === 'offline' ? 'bg-red-950 text-red-500 border-red-900 opacity-50' : 'bg-purple-950/50 text-purple-300 border-purple-800 hover:bg-purple-900'}`}>
-                            {name} ({ship.systems[key as keyof typeof ship.systems]?.integrity}%)
-                        </button>
-                    ))}
                 </div>
             </div>
 
