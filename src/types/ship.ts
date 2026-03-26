@@ -39,8 +39,7 @@ export interface ShipResources {
 
 export interface ShipStation {
     role: StationRole;
-    occupantId: string | null;
-    occupantName: string | null;
+    occupants: Record<string, { id: string; name: string }>;
 }
 
 export type ShipActionType = 'fire' | 'evade' | 'scan' | 'repair' | 'redirect_power' | 'brace';

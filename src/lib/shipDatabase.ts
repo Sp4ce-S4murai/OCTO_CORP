@@ -34,10 +34,10 @@ export const createShip = async (roomId: string, template: ShipTemplate) => {
         },
         weapons,
         stations: {
-            bridge:      { role: 'pilot',    occupantId: null, occupantName: null },
-            tactical:    { role: 'gunner',   occupantId: null, occupantName: null },
-            engineering: { role: 'engineer', occupantId: null, occupantName: null },
-            science:     { role: 'science',  occupantId: null, occupantName: null },
+            bridge:      { role: 'pilot',    occupants: {} },
+            tactical:    { role: 'gunner',   occupants: {} },
+            engineering: { role: 'engineer', occupants: {} },
+            science:     { role: 'science',  occupants: {} },
         },
     };
 
@@ -80,24 +80,22 @@ export const occupyStation = async (roomId: string, stationKey: string, playerId
 
     const updates: Record<string, unknown> = {};
 
-    // Remove from old station
+    // Remove from old stations
     Object.entries(ship.stations).forEach(([key, station]) => {
-        if (station.occupantId === playerId && key !== stationKey) {
-            updates[`stations/${key}/occupantId`] = null;
-            updates[`stations/${key}/occupantName`] = null;
+        if (station.occupants && station.occupants[playerId] && key !== stationKey) {
+            updates[`stations/${key}/occupants/${playerId}`] = null;
         }
     });
 
-    // Assign to new station
-    updates[`stations/${stationKey}/occupantId`] = playerId;
-    updates[`stations/${stationKey}/occupantName`] = playerName;
+    // Add to new station
+    updates[`stations/${stationKey}/occupants/${playerId}`] = { id: playerId, name: playerName };
 
     await update(shipRef, updates);
 };
 
-export const leaveStation = async (roomId: string, stationKey: string) => {
-    const stationRef = ref(database, `${shipPath(roomId)}/stations/${stationKey}`);
-    await update(stationRef, { occupantId: null, occupantName: null });
+export const leaveStation = async (roomId: string, stationKey: string, playerId: string) => {
+    const occupantRef = ref(database, `${shipPath(roomId)}/stations/${stationKey}/occupants/${playerId}`);
+    await remove(occupantRef);
 };
 
 // --- SHIP COMBAT ---
