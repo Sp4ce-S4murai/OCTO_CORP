@@ -431,15 +431,17 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     };
 
     return (
-        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-8 items-start relative pb-24">
+        <div className="max-w-7xl mx-auto flex flex-col gap-8 relative pb-24">
 
             {/* SHIP DASHBOARD + STATION PANEL (full-width, above main layout) */}
             {shipData && (
-                <div className="w-full flex flex-col gap-4 xl:col-span-2" style={{order: -1}}>
+                <div className="w-full flex flex-col gap-4">
                     <ShipDashboard ship={shipData} />
                     {character && <StationPanel roomId={roomId} ship={shipData} playerId={playerId} character={character} />}
                 </div>
             )}
+
+            <div className="flex flex-col xl:flex-row gap-8 items-start">
 
 
             {/* JUMPSCARE OVERLAY */}
@@ -870,6 +872,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                     )}
                 </div>
             </aside>
+            </div>
         </div>
     );
 }
