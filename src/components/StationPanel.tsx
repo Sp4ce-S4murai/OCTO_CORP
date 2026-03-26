@@ -104,7 +104,7 @@ function StationModal({
     const meta = STATION_META[stationKey];
     if (!meta) return null;
 
-    const station = ship.stations[stationKey];
+    const station = (ship.stations || {})[stationKey];
     const occupants = station?.occupants ? Object.values(station.occupants) : [];
     const isAlreadyHere = occupants.some(o => o.playerId === playerId);
     const crewCount = occupants.length + (isAlreadyHere ? 0 : 1); // projected count after joining
@@ -227,9 +227,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const [rollInput, setRollInput] = useState("");
 
     // Find which station this player occupies
-    const myStationEntry = Object.entries(ship.stations).find(
-        ([, s]) => s.occupants && s.occupants[playerId]
-    );
+    const myStationEntry = Object.entries(ship.stations || {}).find(([, s]) => s.occupants && s.occupants[playerId]);
     const myStationKey = myStationEntry?.[0];
     const myStation = myStationEntry?.[1];
     const myOccupant = myStation?.occupants?.[playerId];
@@ -347,7 +345,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                     </h3>
                     <div className="grid grid-cols-2 gap-2">
                         {Object.entries(STATION_META).map(([key, meta]) => {
-                            const station = ship.stations[key];
+                            const station = (ship.stations || {})[key];
                             const occupants = station?.occupants ? Object.values(station.occupants) : [];
                             const cm = { blue: 'border-blue-800 text-blue-400 hover:bg-blue-950/30', red: 'border-red-800 text-red-400 hover:bg-red-950/30', amber: 'border-amber-800 text-amber-400 hover:bg-amber-950/30', purple: 'border-purple-800 text-purple-400 hover:bg-purple-950/30' }[meta.color as string] || '';
                             const crewBonus = occupants.length >= 2 ? meta.crewBonuses.find(b => b.count <= occupants.length + 1)?.label : null;

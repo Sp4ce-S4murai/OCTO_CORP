@@ -44,6 +44,67 @@ const COLOR_MAP: Record<string, { text: string; bg: string; border: string; glow
     purple: { text: 'text-purple-300', bg: 'bg-purple-950/40', border: 'border-purple-700', glow: 'shadow-purple-900/40' },
 };
 
+function StationRoom({ segKey, seg, ship, className }: { segKey: string; seg: typeof STATION_SEGMENTS[string]; ship: ShipState; className?: string }) {
+    const station = (ship.stations || {})[segKey];
+    const cm = COLOR_MAP[seg.color];
+    const sysState = ship.systems[seg.system as keyof typeof ship.systems];
+    const occupants = station?.occupants ? Object.values(station.occupants) : [];
+    const hasAnyActed = occupants.some(o => o.hasActed);
+    const allActed = occupants.length > 0 && occupants.every(o => o.hasActed);
+    const crewBonus = occupants.length >= 3 ? '+++ TRIPULAÇÃO COMPLETA' : occupants.length === 2 ? '++ SUPORTE ADICIONAL' : '';
+
+    return (
+        <div className={`relative border-2 ${cm.border} ${cm.bg} p-3 shadow-lg ${cm.glow} flex flex-col gap-2 min-h-[100px] overflow-hidden ${className}`}>
+            {/* Corner labels */}
+            <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{seg.icon}</span>
+                    <span className={`text-[10px] font-bold tracking-widest uppercase ${cm.text}`}>{seg.label}</span>
+                </div>
+                {/* System status LED */}
+                <div
+                    className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${sysState?.status === 'online' ? 'bg-emerald-500 text-emerald-500' : sysState?.status === 'damaged' ? 'bg-amber-500 text-amber-500 animate-pulse' : 'bg-red-600 text-red-600 animate-pulse'}`}
+                    title={`${SYSTEM_LABELS[seg.system]}: ${sysState?.integrity}%`}
+                />
+            </div>
+
+            {/* Occupants list */}
+            <div className="flex flex-col gap-1 flex-1 relative z-10 mt-1">
+                {occupants.length === 0 ? (
+                    <span className="text-[9px] text-zinc-600 uppercase tracking-widest font-bold text-center mt-2">— VAGO —</span>
+                ) : (
+                    occupants.map(occ => (
+                        <div key={occ.playerId} className="flex items-center gap-1.5 bg-black/40 px-2 py-1 rounded">
+                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${occ.hasActed ? 'bg-emerald-500 shadow-[0_0_5px_theme(colors.emerald.500)]' : 'bg-zinc-600'}`} />
+                            <span className={`text-[9.5px] font-bold uppercase truncate ${occ.hasActed ? 'text-emerald-500 line-through' : 'text-zinc-200'}`}>
+                                {occ.playerName}
+                            </span>
+                            {occ.hasActed && <span className="text-[8px] text-emerald-700 ml-auto font-bold tracking-widest">OK</span>}
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* Crew bonus badge */}
+            {crewBonus && (
+                <div className={`text-[8px] font-bold uppercase tracking-widest ${cm.text} opacity-70 relative z-10 text-center mt-auto pt-2`}>
+                    {crewBonus}
+                </div>
+            )}
+
+            {/* System offline overlay */}
+            {sysState?.status === 'offline' && (
+                <div className="absolute inset-0 bg-red-950/80 flex items-center justify-center border-2 border-red-500 z-20 backdrop-blur-sm">
+                    <span className="text-xs font-bold text-red-400 uppercase tracking-[0.3em] shadow-red-900 drop-shadow-lg flex flex-col items-center gap-1">
+                        <AlertTriangle size={24} className="mb-1" />
+                        OFFLINE
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function ShipDashboard({ ship }: ShipDashboardProps) {
     const hpPercent = ship.hp.max > 0 ? (ship.hp.current / ship.hp.max) * 100 : 0;
     const [flashDamage, setFlashDamage] = useState(false);
@@ -105,86 +166,39 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                         </div>
                     </div>
 
-                    {/* FTL SHIP DIAGRAM — 4 compartments in a stylised hull shape */}
-                    <div className="relative">
-                        {/* Ship outline decoration */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5">
-                            <div className="w-full h-0.5 bg-cyan-400" />
+                    {/* FTL SHIP DIAGRAM — Top-down schematic */}
+                    <div className="relative flex flex-col items-center gap-2 p-6 min-w-[300px]">
+                        {/* Hull Outline Silhouette */}
+                        <div className="absolute inset-0 mt-2 mb-2 max-w-[260px] mx-auto bg-cyan-950/10 border-2 border-cyan-900/30 rounded-t-[140px] rounded-b-3xl pointer-events-none" />
+                        
+                        <div className="absolute top-1/2 bottom-0 left-1/2 w-[80px] -ml-[40px] bg-cyan-950/10 border-x-2 border-cyan-900/30 pointer-events-none" />
+
+                        {/* BRIDGE (Top Center) */}
+                        <StationRoom 
+                            segKey="bridge" seg={STATION_SEGMENTS.bridge} ship={ship} 
+                            className="w-full max-w-[160px] rounded-t-[60px] border-b-0 pb-6 shadow-[inset_0_20px_20px_rgba(0,0,0,0.5)] z-10" 
+                        />
+
+                        {/* MIDDLE ROW (Tactical & Science) */}
+                        <div className="flex w-full max-w-[280px] justify-between gap-12 z-10 -mt-2">
+                            {/* Connector horizontal */}
+                            <div className="absolute top-[130px] left-1/2 w-[160px] -ml-[80px] h-8 bg-zinc-950 border-y-2 border-cyan-900/30 -z-10" />
+
+                            <StationRoom 
+                                segKey="tactical" seg={STATION_SEGMENTS.tactical} ship={ship} 
+                                className="w-1/2 rounded-l-xl border-r-0" 
+                            />
+                            <StationRoom 
+                                segKey="science" seg={STATION_SEGMENTS.science} ship={ship} 
+                                className="w-1/2 rounded-r-xl border-l-0" 
+                            />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 relative">
-                            {Object.entries(STATION_SEGMENTS).map(([key, seg]) => {
-                                const station = ship.stations[key];
-                                const cm = COLOR_MAP[seg.color];
-                                const sysState = ship.systems[seg.system as keyof typeof ship.systems];
-                                const occupants = station?.occupants ? Object.values(station.occupants) : [];
-                                const hasAnyActed = occupants.some(o => o.hasActed);
-                                const allActed = occupants.length > 0 && occupants.every(o => o.hasActed);
-                                const crewBonus = occupants.length >= 3 ? '+++ TRIPULAÇÃO COMPLETA' : occupants.length === 2 ? '++ SUPORTE ADICIONAL' : '';
-
-                                return (
-                                    <div
-                                        key={key}
-                                        className={`relative border ${cm.border} ${cm.bg} p-3 shadow-lg ${cm.glow} flex flex-col gap-2 min-h-[100px]`}
-                                    >
-                                        {/* Corner labels */}
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-sm">{seg.icon}</span>
-                                                <span className={`text-[10px] font-bold tracking-widest uppercase ${cm.text}`}>{seg.label}</span>
-                                            </div>
-                                            {/* System status LED */}
-                                            <div
-                                                className={`w-2 h-2 rounded-full ${sysState?.status === 'online' ? 'bg-emerald-500' : sysState?.status === 'damaged' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-pulse'}`}
-                                                title={`${SYSTEM_LABELS[seg.system]}: ${sysState?.integrity}%`}
-                                            />
-                                        </div>
-
-                                        {/* Occupants list */}
-                                        <div className="flex flex-col gap-1 flex-1">
-                                            {occupants.length === 0 ? (
-                                                <span className="text-[9px] text-zinc-600 uppercase tracking-widest font-bold">— VAGO —</span>
-                                            ) : (
-                                                occupants.map(occ => (
-                                                    <div key={occ.playerId} className="flex items-center gap-1.5">
-                                                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${occ.hasActed ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
-                                                        <span className={`text-[9px] font-bold uppercase truncate ${occ.hasActed ? 'text-emerald-500 line-through' : cm.text}`}>
-                                                            {occ.playerName}
-                                                        </span>
-                                                        {occ.hasActed && <span className="text-[8px] text-emerald-700 ml-auto">✓</span>}
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-
-                                        {/* Crew bonus badge */}
-                                        {crewBonus && (
-                                            <div className={`text-[8px] font-bold uppercase tracking-widest ${cm.text} opacity-70`}>
-                                                {crewBonus}
-                                            </div>
-                                        )}
-
-                                        {/* Combat action indicator */}
-                                        {ship.combat?.isActive && allActed && (
-                                            <div className="absolute top-1 right-1 bg-emerald-900/80 border border-emerald-700 px-1 py-0.5">
-                                                <span className="text-[8px] font-bold text-emerald-400 uppercase">PRONTO</span>
-                                            </div>
-                                        )}
-
-                                        {/* System offline overlay */}
-                                        {sysState?.status === 'offline' && (
-                                            <div className="absolute inset-0 bg-red-950/60 flex items-center justify-center border border-red-800">
-                                                <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest animate-pulse">OFFLINE</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Ship hull connector lines */}
-                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-cyan-900/20 pointer-events-none" />
-                        <div className="absolute top-1/2 left-0 right-0 h-px bg-cyan-900/20 pointer-events-none" />
+                        {/* ENGINEERING (Bottom Center) */}
+                        <StationRoom 
+                            segKey="engineering" seg={STATION_SEGMENTS.engineering} ship={ship} 
+                            className="w-full max-w-[220px] rounded-b-xl border-t-0 pt-6 shadow-[inset_0_-20px_20px_rgba(0,0,0,0.5)] z-10 mt-2" 
+                        />
                     </div>
                 </div>
 
