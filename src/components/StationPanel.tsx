@@ -367,41 +367,62 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                     />
                 )}
 
-                <section className="border border-cyan-900/50 bg-cyan-950/5 p-4">
-                    <h3 className="text-xs font-bold tracking-[0.2em] text-cyan-500 uppercase mb-3 flex items-center gap-2">
-                        <Shield size={14} /> SELECIONE SEU POSTO DE BORDO
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(STATION_META).map(([key, meta]) => {
-                            const station = (ship.stations || {})[key];
-                            const occupants = station?.occupants ? Object.values(station.occupants) : [];
-                            const cm = { blue: 'border-blue-800 text-blue-400 hover:bg-blue-950/30', red: 'border-red-800 text-red-400 hover:bg-red-950/30', amber: 'border-amber-800 text-amber-400 hover:bg-amber-950/30', purple: 'border-purple-800 text-purple-400 hover:bg-purple-950/30' }[meta.color as string] || '';
-                            const crewBonus = occupants.length >= 2 ? meta.crewBonuses.find(b => b.count <= occupants.length + 1)?.label : null;
-                            return (
-                                <button
-                                    key={key}
-                                    onClick={() => setPreviewStation(key)}
-                                    className={`flex flex-col gap-1.5 px-4 py-3 border text-left transition-colors cursor-pointer ${cm} bg-zinc-950/50`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="opacity-80">{meta.icon}</span>
-                                        <span className="text-xs font-bold tracking-widest uppercase">{meta.label}</span>
-                                    </div>
-                                    {occupants.length > 0 ? (
-                                        <div className="flex flex-wrap gap-1">
-                                            {occupants.slice(0, 3).map(occ => (
-                                                <span key={occ.playerId} className="text-[9px] font-bold uppercase bg-zinc-900 px-1.5 py-0.5 border border-zinc-700 text-zinc-400">
-                                                    {occ.playerName.split(' ')[0]}
-                                                </span>
-                                            ))}
-                                            {crewBonus && <span className="text-[8px] font-bold uppercase text-emerald-500 px-1 py-0.5">+{crewBonus}</span>}
+                <section className="border border-cyan-900/40 bg-[#050806] p-5 relative overflow-hidden font-mono mt-4">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,255,100,0.02)_50%)] bg-[length:100%_4px] pointer-events-none z-0" />
+
+                    <div className="relative z-10 flex flex-col h-full">
+                        <div className="flex items-center gap-3 mb-2 border-b border-cyan-900/30 pb-2">
+                            <Shield size={16} className="text-cyan-600" />
+                            <h3 className="text-xs font-bold tracking-[0.3em] text-cyan-500 uppercase">ACESSO A TERMINAIS DE BORDO</h3>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 tracking-widest uppercase mb-5">/ SELECIONE UM POSTO PARA CONECTAR NEURAL-LINK</p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {Object.entries(STATION_META).map(([key, meta]) => {
+                                const station = (ship.stations || {})[key];
+                                const occupants = station?.occupants ? Object.values(station.occupants) : [];
+                                const cm = { blue: 'border-blue-800/80 text-blue-400', red: 'border-red-800/80 text-red-400', amber: 'border-amber-800/80 text-amber-400', purple: 'border-purple-800/80 text-purple-400' }[meta.color as string] || '';
+                                const bgHv = { blue: 'hover:bg-blue-950/30 hover:border-blue-600', red: 'hover:bg-red-950/30 hover:border-red-600', amber: 'hover:bg-amber-950/30 hover:border-amber-600', purple: 'hover:bg-purple-950/30 hover:border-purple-600' }[meta.color as string] || '';
+                                const crewBonus = occupants.length >= 2 ? meta.crewBonuses.find(b => b.count <= occupants.length + 1)?.label : null;
+                                return (
+                                    <button
+                                        key={key}
+                                        onClick={() => setPreviewStation(key)}
+                                        className={`relative flex flex-col px-4 py-3 border transition-colors cursor-pointer ${cm} bg-zinc-950/80 group ${bgHv}`}
+                                    >
+                                        <div className="flex justify-between items-start w-full mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="opacity-80 group-hover:animate-pulse">{meta.icon}</span>
+                                                <span className="text-[11px] font-bold tracking-[0.2em] uppercase">{meta.label}</span>
+                                            </div>
+                                            <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] opacity-50 ${meta.color.replace('text-', 'bg-')}`} />
                                         </div>
-                                    ) : (
-                                        <span className="text-[9px] text-zinc-600 uppercase tracking-widest">— Vago —</span>
-                                    )}
-                                </button>
-                            );
-                        })}
+
+                                        <div className="w-full text-left border-t border-zinc-900/80 pt-2 flex flex-col gap-2">
+                                            {occupants.length > 0 ? (
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-[8px] uppercase tracking-widest text-zinc-600">TRIPULAÇÃO ATIVA:</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {occupants.slice(0, 3).map(occ => (
+                                                            <span key={occ.playerId} className="text-[9px] font-bold uppercase bg-zinc-900 px-1.5 py-0.5 border border-zinc-700 text-zinc-300">
+                                                                {occ.playerName.split(' ')[0]}
+                                                            </span>
+                                                        ))}
+                                                        {crewBonus && <span className="text-[8px] font-bold uppercase tracking-widest text-emerald-500 px-2 py-0.5 border-l border-emerald-900 ml-1">+{crewBonus}</span>}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[9px] text-zinc-600 uppercase tracking-[0.3em] font-bold py-1">— VAGO —</span>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Corners */}
+                                        <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${cm.split(' ')[0]} -translate-x-[1px] -translate-y-[1px]`} />
+                                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${cm.split(' ')[0]} translate-x-[1px] translate-y-[1px]`} />
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </section>
             </>
@@ -417,35 +438,42 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         : null;
 
     return (
-        <section className={`border ${stationMeta.borderColor} ${stationMeta.bgColor} p-4`}>
-            <div className="flex justify-between items-center mb-3">
-                <h3 className={`text-sm font-bold tracking-widest uppercase flex items-center gap-2 ${stationMeta.color}`}>
-                    {stationMeta.icon} {stationMeta.label}
-                    {crewBonusActive && (
-                        <span className="text-[9px] font-bold bg-emerald-900 text-emerald-400 border border-emerald-700 px-2 py-0.5">
-                            {crewBonusActive.label}
-                        </span>
-                    )}
-                </h3>
-                <button onClick={() => leaveStation(roomId, myStationKey, playerId)}
-                    className="text-[10px] text-zinc-600 hover:text-zinc-400 uppercase tracking-widest font-bold transition">
-                    ABANDONAR POSTO
-                </button>
-            </div>
+        <section className={`border border-zinc-800 bg-[#050806] px-5 py-4 relative overflow-hidden font-mono mt-4`}>
+            {/* Scanlines */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,255,100,0.02)_50%)] bg-[length:100%_4px] pointer-events-none z-0" />
+            
+            <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4 border-b border-zinc-900 pb-3">
+                    <div className="flex flex-col">
+                        <span className="text-[8px] text-zinc-600 tracking-[0.4em] uppercase mb-1">/ LOGIN ATIVO / {character.name}</span>
+                        <h3 className={`text-sm font-bold tracking-[0.2em] uppercase flex items-center gap-2 ${stationMeta.color}`}>
+                            {stationMeta.icon} {stationMeta.label}
+                            {crewBonusActive && (
+                                <span className="text-[8px] tracking-widest bg-emerald-950/30 text-emerald-400 border border-emerald-900 px-2 py-0.5 ml-2">
+                                    + {crewBonusActive.label}
+                                </span>
+                            )}
+                        </h3>
+                    </div>
+                    <button onClick={() => leaveStation(roomId, myStationKey, playerId)}
+                        className="text-[9px] text-zinc-500 hover:text-red-400 border border-zinc-800 hover:border-red-900 px-3 py-1 uppercase tracking-[0.2em] font-bold transition bg-zinc-950">
+                        DESCONECTAR
+                    </button>
+                </div>
 
             {/* Crew at station */}
             {crewAtMyStation > 1 && (
-                <div className="flex items-center gap-2 mb-3">
-                    <Users size={11} className="text-zinc-500" />
-                    <div className="flex gap-1">
+                <div className="flex items-center gap-2 mb-4 bg-zinc-950/50 border border-zinc-900 px-3 py-2">
+                    <Users size={12} className="text-zinc-500" />
+                    <div className="flex gap-1.5 flex-1">
                         {Object.values(myStation!.occupants!).map(occ => (
-                            <span key={occ.playerId} className={`text-[9px] font-bold uppercase px-2 py-0.5 border ${stationMeta.borderColor} ${stationMeta.color}`}>
+                            <span key={occ.playerId} className={`text-[9px] font-bold uppercase px-2 py-0.5 border ${occ.hasActed ? 'border-emerald-900/50 text-emerald-600/50' : `${stationMeta.borderColor} ${stationMeta.color}`}`}>
                                 {occ.playerName.split(' ')[0]}{occ.hasActed ? ' ✓' : ''}
                             </span>
                         ))}
                     </div>
                     {crewBonusActive && (
-                        <span className="text-[9px] text-zinc-500 ml-auto">{crewBonusActive.effect}</span>
+                        <span className="text-[9px] font-mono tracking-widest text-emerald-600 ml-auto uppercase opacity-80 border-l border-zinc-800 pl-3">» {crewBonusActive.effect}</span>
                     )}
                 </div>
             )}
@@ -476,13 +504,14 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
 
             {/* PILOT ACTIONS */}
             {stationRole === 'pilot' && isCombatActive && isStationsPhase && !alreadyActed && (
-                <div className="flex flex-col gap-2">
-                    <div className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">
-                        ALVO EVASÃO: ≤{pilotTarget} | (SPD:{ship.stats.speed} + SKILL:{pilotSkill} {crewAtMyStation >= 2 ? '+ CREW:10' : ''}) | COMBUSTÍVEL: {ship.resources.fuel.current}
+                <div className="flex flex-col gap-3">
+                    <div className="text-[10px] text-blue-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-blue-900 pl-2">
+                        ALVO EVASÃO: ≤{pilotTarget} <br/> 
+                        <span className="text-[8px] text-zinc-500 font-mono">(SPD:{ship.stats.speed} + SKILL:{pilotSkill} {crewAtMyStation >= 2 ? '+ CREW:10' : ''}) | COMB: {ship.resources.fuel.current}</span>
                     </div>
                     <button onClick={handleEvade}
-                        className="bg-blue-950/50 hover:bg-blue-900 text-blue-400 border border-blue-800 px-4 py-3 font-bold tracking-widest flex items-center justify-center gap-2 transition upper text-xs">
-                        <Navigation size={14} /> MANOBRA EVASIVA {crewAtMyStation >= 3 ? '(ROLAR 2x)' : ''}
+                        className="bg-blue-950/30 hover:bg-blue-900/60 text-blue-400 border border-blue-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition uppercase text-[10px]">
+                        <Navigation size={14} /> MANOBRA EVASIVA {crewAtMyStation >= 3 ? '(VANTAGEM)' : ''}
                     </button>
                 </div>
             )}
@@ -490,23 +519,24 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {/* GUNNER ACTIONS */}
             {stationRole === 'gunner' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
-                    <div className="text-[10px] text-red-600 font-bold uppercase tracking-widest">
-                        ALVO DISPARO: ≤{gunnerTarget} | (CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}) | MUN: {ship.resources.ammo.current}
+                    <div className="text-[10px] text-red-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-red-900 pl-2">
+                        ALVO DISPARO: ≤{gunnerTarget} <br/>
+                        <span className="text-[8px] text-zinc-500 font-mono">(CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}) | MUN: {ship.resources.ammo.current}</span>
                     </div>
                     <div className="flex flex-col gap-1.5">
                         {Object.entries(ship.weapons).map(([wId, weapon]) => (
-                            <label key={wId} className={`flex items-center gap-3 px-3 py-2 border cursor-pointer transition ${selectedWeaponId === wId ? 'border-red-500 bg-red-950/30 text-red-300' : 'border-zinc-800 text-zinc-500 hover:border-red-800'} ${weapon.currentCooldown > 0 ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                            <label key={wId} className={`flex items-center gap-3 px-3 py-2 border cursor-pointer transition ${selectedWeaponId === wId ? 'border-red-600 bg-red-950/40 text-red-300' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500 hover:border-red-900/60'} ${weapon.currentCooldown > 0 ? 'opacity-30 cursor-not-allowed' : ''}`}>
                                 <input type="radio" name="weapon" value={wId} checked={selectedWeaponId === wId} onChange={() => setSelectedWeaponId(wId)} disabled={weapon.currentCooldown > 0} className="hidden" />
                                 <Crosshair size={12} />
-                                <span className="text-xs font-bold uppercase flex-1">{weapon.name}</span>
-                                <span className="text-[9px] font-mono">{weapon.damage} | Custo:{weapon.ammoCost}</span>
-                                {weapon.currentCooldown > 0 && <span className="text-[9px] text-amber-500">CD:{weapon.currentCooldown}</span>}
+                                <span className="text-[11px] font-bold uppercase tracking-widest flex-1">{weapon.name}</span>
+                                <span className="text-[9px] font-mono text-zinc-600">DMG:{weapon.damage} | CST:{weapon.ammoCost}</span>
+                                {weapon.currentCooldown > 0 && <span className="text-[9px] text-amber-500 ml-2 border border-amber-900 px-1 py-0.5">CD:{weapon.currentCooldown}</span>}
                             </label>
                         ))}
                     </div>
                     <button onClick={handleFire} disabled={!selectedWeaponId || ship.systems.weapons.status === 'offline'}
-                        className="bg-red-900 hover:bg-red-800 text-red-100 px-4 py-3 font-bold tracking-widest flex items-center justify-center gap-2 transition upper text-xs border border-red-700 disabled:opacity-30 disabled:cursor-not-allowed">
-                        <Zap size={14} /> DISPARAR {crewAtMyStation >= 3 ? '(DUPLO DISPONÍVEL)' : ''}
+                        className="bg-red-950/30 hover:bg-red-900/60 text-red-400 border border-red-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition uppercase text-[10px] disabled:opacity-30 disabled:cursor-not-allowed">
+                        <Zap size={14} /> AUTORIZAR DISPARO {crewAtMyStation >= 3 ? '(DUPLO)' : ''}
                     </button>
                 </div>
             )}
@@ -514,19 +544,20 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {/* ENGINEER ACTIONS */}
             {stationRole === 'engineer' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
-                    <div className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">
-                        ALVO REPARO: ≤{engineerTarget} | (INT:{character.stats.intellect} + SKILL:{engineerSkill}) | RECUPERAÇÃO: +{crewAtMyStation >= 2 ? '40' : '20'}%
+                    <div className="text-[10px] text-amber-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-amber-900 pl-2">
+                        ALVO REPARO: ≤{engineerTarget} <br/>
+                        <span className="text-[8px] text-zinc-500 font-mono">(INT:{character.stats.intellect} + SKILL:{engineerSkill}) | RECUPERAÇÃO: +{crewAtMyStation >= 2 ? '40' : '20'}%</span>
                     </div>
                     <div className="flex flex-col gap-1.5">
                         {Object.entries(ship.systems).map(([key, sys]) => (
-                            <div key={key} className="flex items-center justify-between bg-zinc-950 border border-amber-900/30 px-3 py-2">
+                            <div key={key} className="flex items-center justify-between bg-zinc-950/80 border border-zinc-800 px-3 py-2">
                                 <div className="flex items-center gap-2">
                                     <div className={`w-1.5 h-1.5 rounded-full ${sys.status === 'online' ? 'bg-emerald-500' : sys.status === 'damaged' ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-pulse'}`} />
-                                    <span className="text-xs font-bold uppercase text-amber-400">{SYSTEM_LABELS[key]}</span>
-                                    <span className="text-[9px] text-amber-700 font-mono">{sys.integrity}%</span>
+                                    <span className="text-[10px] tracking-widest uppercase text-amber-500/80 font-bold">{SYSTEM_LABELS[key]}</span>
+                                    <span className="text-[9px] text-amber-700 font-mono tracking-widest ml-2">{sys.integrity}%</span>
                                 </div>
                                 <button onClick={() => handleRepair(key)} disabled={sys.integrity >= 100}
-                                    className="text-[10px] font-bold uppercase bg-amber-950/50 text-amber-400 border border-amber-800 px-3 py-1 hover:bg-amber-900 transition disabled:opacity-20">
+                                    className="text-[9px] font-bold tracking-[0.2em] uppercase bg-amber-950/30 text-amber-400 border border-amber-900/50 px-3 py-1.5 hover:bg-amber-900 transition disabled:opacity-20 disabled:cursor-not-allowed">
                                     REPARAR
                                 </button>
                             </div>
@@ -538,27 +569,29 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {/* SCIENCE ACTIONS */}
             {stationRole === 'science' && isCombatActive && isStationsPhase && !alreadyActed && (
                 <div className="flex flex-col gap-3">
-                    <div className="text-[10px] text-purple-600 font-bold uppercase tracking-widest">
-                        ALVO SCAN: ≤{scienceTarget} | (SNS:{ship.stats.sensors} + SKILL:{scienceSkill}) {crewAtMyStation >= 2 && ship.stats.sensors > 40 ? '— SCAN AUTOMÁTICO ATIVO' : ''}
+                    <div className="text-[10px] text-purple-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-purple-900 pl-2 mb-1">
+                        ALVO SCAN: ≤{scienceTarget} {crewAtMyStation >= 2 && ship.stats.sensors > 40 ? '— (SCAN AUTOMÁTICO ATIVO)' : ''} <br/>
+                        <span className="text-[8px] text-zinc-500 font-mono">(SNS:{ship.stats.sensors} + SKILL:{scienceSkill})</span>
                     </div>
                     {ship.enemies && Object.values(ship.enemies).map(enemy => (
-                        <div key={enemy.id} className={`border px-3 py-2 ${enemy.revealed ? 'border-purple-700 bg-purple-950/20' : 'border-zinc-800 bg-zinc-900/50'}`}>
+                        <div key={enemy.id} className={`border border-zinc-900 bg-zinc-950/50 px-3 py-2`}>
                             <div className="flex items-center gap-2">
                                 <span>{enemy.icon}</span>
-                                <span className="text-xs font-bold uppercase text-purple-400">{enemy.name}</span>
+                                <span className={`text-[11px] font-bold uppercase tracking-widest ${enemy.revealed ? 'text-purple-400' : 'text-zinc-500'}`}>{enemy.name}</span>
                                 {enemy.revealed
-                                    ? <span className="text-[9px] text-purple-600 font-mono ml-auto">HP:{enemy.hp.current}/{enemy.hp.max} AR:{enemy.stats.armor} CBT:{enemy.stats.combat}</span>
-                                    : <span className="text-[9px] text-zinc-600 ml-auto">NÃO REVELADO</span>
+                                    ? <span className="text-[9px] text-purple-600 font-mono tracking-widest ml-auto">HP:{enemy.hp.current}/{enemy.hp.max} AR:{enemy.stats.armor} CBT:{enemy.stats.combat}</span>
+                                    : <span className="text-[9px] text-zinc-600 font-mono tracking-widest ml-auto bg-zinc-900 px-2">DADOS CRIPTOGRAFADOS</span>
                                 }
                             </div>
                         </div>
                     ))}
                     <button onClick={handleScan} disabled={ship.systems.sensors.status === 'offline'}
-                        className="bg-purple-900 hover:bg-purple-800 text-purple-100 px-4 py-3 font-bold tracking-widest flex items-center justify-center gap-2 transition text-xs border border-purple-700 disabled:opacity-30">
-                        <Radio size={14} /> ESCANEAR CONTATOS
+                        className="bg-purple-950/30 hover:bg-purple-900/60 text-purple-400 border border-purple-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition text-[10px] uppercase mt-2 disabled:opacity-30 disabled:cursor-not-allowed">
+                        <Radio size={14} /> VARREDURA DE SENSORES
                     </button>
                 </div>
             )}
+            </div>
         </section>
     );
 }
