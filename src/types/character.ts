@@ -1,3 +1,5 @@
+import { ShipState } from './ship';
+
 export type CharacterClass = 'Soldier' | 'Android' | 'Scientist' | 'Teamster';
 
 export interface Vitals {
@@ -102,6 +104,7 @@ export interface RoomData {
     playerOrder?: string[];
     logs: Record<string, RollLog>;
     activeImage?: string;
+    ship?: ShipState;
 }
 
 export interface RollLog {
@@ -113,5 +116,5 @@ export interface RollLog {
     statValue: number;
     modifier?: { name: string; value: number }; // +10, +15, +20
     roll: number;
-    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Panic' | 'Warden Message' | 'Tabela de Pânico';
+    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Panic' | 'Warden Message' | 'Tabela de Pânico' | 'Ship Fire' | 'Ship Evade' | 'Ship Scan' | 'Ship Repair' | 'Ship Critical' | 'Ship Damage' | 'Hull Breach' | 'System Failure';
 }

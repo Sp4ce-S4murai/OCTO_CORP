@@ -9,6 +9,8 @@ import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 import { PanicIcon } from "./PanicIcon";
+import { ShipDashboard } from "./ShipDashboard";
+import { ShipWardenPanel } from "./ShipWardenPanel";
 
 
 const getTimestamp = () => Date.now();
@@ -505,6 +507,11 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     return (
         <main className="max-w-7xl mx-auto flex flex-col gap-8">
 
+            {/* SHIP DASHBOARD (visible when ship exists) */}
+            {roomData?.ship && <ShipDashboard ship={roomData.ship} />}
+
+            {/* SHIP WARDEN PANEL */}
+            <ShipWardenPanel roomId={roomId} ship={roomData?.ship || null} />
             <header className="border-b-2 border-emerald-900 pb-4 flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold uppercase tracking-widest text-emerald-400">

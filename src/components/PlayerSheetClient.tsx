@@ -12,7 +12,10 @@ import { HeartRateMonitor } from "./HeartRateMonitor";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { PanicIcon } from "./PanicIcon";
 import { EnvironmentState } from "@/types/character";
+import { ShipState } from "@/types/ship";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
+import { ShipDashboard } from "./ShipDashboard";
+import { StationPanel } from "./StationPanel";
 
 
 const VOID_MESSAGES = [
@@ -52,6 +55,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [manualPanicInput, setManualPanicInput] = useState("");
     const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
+    const [shipData, setShipData] = useState<ShipState | null>(null);
 
     // Track other players in the room
     const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
@@ -109,6 +113,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                 onValue(ref(database, `rooms/${roomId}/activeImage`), (snap) => {
                     setActiveImage(snap.val());
+                });
+
+                onValue(ref(database, `rooms/${roomId}/ship`), (snap) => {
+                    setShipData(snap.val());
                 });
 
                 onValue(ref(database, `rooms/${roomId}/activePanicTest`), (snap) => {
@@ -424,6 +432,14 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-8 items-start relative pb-24">
+
+            {/* SHIP DASHBOARD + STATION PANEL (full-width, above main layout) */}
+            {shipData && (
+                <div className="w-full flex flex-col gap-4 xl:col-span-2" style={{order: -1}}>
+                    <ShipDashboard ship={shipData} />
+                    {character && <StationPanel roomId={roomId} ship={shipData} playerId={playerId} character={character} />}
+                </div>
+            )}
 
 
             {/* JUMPSCARE OVERLAY */}
