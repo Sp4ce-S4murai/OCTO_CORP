@@ -37,9 +37,15 @@ export interface ShipResources {
     ammo:   { current: number; max: number };
 }
 
+export interface StationOccupant {
+    playerId: string;
+    playerName: string;
+    hasActed: boolean;
+}
+
 export interface ShipStation {
     role: StationRole;
-    occupants: Record<string, { id: string; name: string }>;
+    occupants: Record<string, StationOccupant>; // playerId -> occupant info
 }
 
 export type ShipActionType = 'fire' | 'evade' | 'scan' | 'repair' | 'redirect_power' | 'brace';

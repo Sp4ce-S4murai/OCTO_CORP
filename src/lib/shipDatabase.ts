@@ -72,7 +72,6 @@ export const subscribeToShip = (
 // --- STATION MANAGEMENT ---
 
 export const occupyStation = async (roomId: string, stationKey: string, playerId: string, playerName: string) => {
-    // First, clear this player from any other station
     const shipRef = ref(database, shipPath(roomId));
     const snapshot = await get(shipRef);
     const ship = snapshot.val() as ShipState | null;
@@ -80,15 +79,20 @@ export const occupyStation = async (roomId: string, stationKey: string, playerId
 
     const updates: Record<string, unknown> = {};
 
-    // Remove from old stations
+    // Remove from any other station first (a player can only be in one station at a time)
     Object.entries(ship.stations).forEach(([key, station]) => {
-        if (station.occupants && station.occupants[playerId] && key !== stationKey) {
+        const occupants = station.occupants || {};
+        if (key !== stationKey && occupants[playerId]) {
             updates[`stations/${key}/occupants/${playerId}`] = null;
         }
     });
 
     // Add to new station
-    updates[`stations/${stationKey}/occupants/${playerId}`] = { id: playerId, name: playerName };
+    updates[`stations/${stationKey}/occupants/${playerId}`] = {
+        playerId,
+        playerName,
+        hasActed: false,
+    };
 
     await update(shipRef, updates);
 };
@@ -153,9 +157,12 @@ export const endShipCombat = async (roomId: string) => {
     });
 };
 
-export const submitShipAction = async (roomId: string, stationRole: string, action: ShipAction) => {
+export const submitShipAction = async (roomId: string, stationKey: string, stationRole: string, action: ShipAction, playerId: string) => {
     const actionRef = ref(database, `${shipPath(roomId)}/combat/actionsThisRound/${stationRole}`);
     await set(actionRef, action);
+    // Mark this occupant as having acted
+    const actedRef = ref(database, `${shipPath(roomId)}/stations/${stationKey}/occupants/${playerId}/hasActed`);
+    await set(actedRef, true);
 };
 
 export const advanceShipPhase = async (roomId: string) => {
@@ -184,12 +191,24 @@ export const advanceShipPhase = async (roomId: string) => {
             });
         }
 
-        await update(shipRef, {
+        // Reset hasActed on all occupants & clear round actions
+        const stationUpdates: Record<string, unknown> = {
             'combat/phase': nextPhase,
             'combat/round': newRound,
             'combat/actionsThisRound': {},
             ...weaponUpdates,
-        });
+        };
+
+        if (ship.stations) {
+            Object.entries(ship.stations).forEach(([stationKey, station]) => {
+                const occupants = station.occupants || {};
+                Object.keys(occupants).forEach(pid => {
+                    stationUpdates[`stations/${stationKey}/occupants/${pid}/hasActed`] = false;
+                });
+            });
+        }
+
+        await update(shipRef, stationUpdates);
     } else {
         nextPhase = phases[currentIdx + 1];
         await update(shipRef, {
