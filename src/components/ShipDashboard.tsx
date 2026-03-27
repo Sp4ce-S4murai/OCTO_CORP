@@ -43,26 +43,26 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
     const isOffline = sysState?.status === 'offline';
     const isDamaged = sysState?.status === 'damaged';
 
-    const baseColors = {
-        blue: { border: 'border-blue-800/80', bg: 'bg-blue-950/10', text: 'text-blue-400', emptyBase: 'bg-blue-900 border-blue-700', active: 'bg-blue-600/50 border-blue-500', wait: 'bg-blue-400 border-blue-300 animate-pulse', actedText: 'text-blue-700', rdyBg: 'bg-blue-950/30' },
-        red: { border: 'border-red-800/80', bg: 'bg-red-950/10', text: 'text-red-400', emptyBase: 'bg-red-900 border-red-700', active: 'bg-red-600/50 border-red-500', wait: 'bg-red-400 border-red-300 animate-pulse', actedText: 'text-red-700', rdyBg: 'bg-red-950/30' },
-        amber: { border: 'border-amber-800/80', bg: 'bg-amber-950/10', text: 'text-amber-400', emptyBase: 'bg-amber-900 border-amber-700', active: 'bg-amber-600/50 border-amber-500', wait: 'bg-amber-400 border-amber-300 animate-pulse', actedText: 'text-amber-700', rdyBg: 'bg-amber-950/30' },
-        purple: { border: 'border-purple-800/80', bg: 'bg-purple-950/10', text: 'text-purple-400', emptyBase: 'bg-purple-900 border-purple-700', active: 'bg-purple-600/50 border-purple-500', wait: 'bg-purple-400 border-purple-300 animate-pulse', actedText: 'text-purple-700', rdyBg: 'bg-purple-950/30' },
+    // Using explicit hex values to bypass Tailwind's JIT purging issues
+    const hexMap = {
+        blue: { text: '#60a5fa', border: '#1e3a8a', bg: 'rgba(30,58,138,0.2)', activeBorder: '#3b82f6', activeBg: 'rgba(59,130,246,0.5)', waitBg: '#60a5fa', waitBorder: '#93c5fd' },
+        red: { text: '#f87171', border: '#7f1d1d', bg: 'rgba(127,29,29,0.2)', activeBorder: '#ef4444', activeBg: 'rgba(239,68,68,0.5)', waitBg: '#f87171', waitBorder: '#fca5a5' },
+        amber: { text: '#fbbf24', border: '#78350f', bg: 'rgba(120,53,15,0.2)', activeBorder: '#f59e0b', activeBg: 'rgba(245,158,11,0.5)', waitBg: '#fbbf24', waitBorder: '#fcd34d' },
+        purple: { text: '#c084fc', border: '#581c87', bg: 'rgba(88,28,135,0.2)', activeBorder: '#a855f7', activeBg: 'rgba(168,85,247,0.5)', waitBg: '#c084fc', waitBorder: '#d8b4fe' },
     };
 
-    const scheme = baseColors[seg.colorBase];
+    const scheme = hexMap[seg.colorBase];
 
-    const statusBorder = isOffline ? 'border-red-800/80' : isDamaged ? 'border-amber-800/80' : scheme.border;
-    const statusBg = isOffline ? 'bg-red-950/30' : isDamaged ? 'bg-amber-950/20' : scheme.bg;
-    const textTheme = isOffline ? 'text-red-500' : isDamaged ? 'text-amber-500' : scheme.text;
+    const currentBorder = isOffline ? '#7f1d1d' : isDamaged ? '#78350f' : scheme.border;
+    const currentBg = isOffline ? 'rgba(127,29,29,0.3)' : isDamaged ? 'rgba(120,53,15,0.2)' : scheme.bg;
+    const currentText = isOffline ? '#ef4444' : isDamaged ? '#f59e0b' : scheme.text;
 
     return (
-        <div className={`relative border ${statusBorder} ${statusBg} p-3 flex flex-col min-h-[110px] backdrop-blur-sm ${className}`}>
-            {/* Scanline background overlay */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,255,100,0.03)_50%)] bg-[length:100%_4px] pointer-events-none" />
+        <div className={`relative border p-3 flex flex-col min-h-[110px] backdrop-blur-sm ${className}`} style={{ borderColor: currentBorder, backgroundColor: currentBg }}>
+            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0) 50%, rgba(255,255,255,0.02) 50%)', backgroundSize: '100% 4px' }} />
 
-            <div className={`flex items-start justify-between border-b ${statusBorder} pb-2 mb-3`}>
-                <div className={`flex flex-col gap-0.5 ${textTheme}`}>
+            <div className="flex items-start justify-between border-b pb-2 mb-3" style={{ borderBottomColor: currentBorder }}>
+                <div className="flex flex-col gap-0.5" style={{ color: currentText }}>
                     <div className="flex items-center gap-1.5">
                         {seg.icon}
                         <span className="text-[11px] font-bold tracking-[0.2em] uppercase">{seg.label}</span>
@@ -71,10 +71,10 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
                 </div>
                 {!isOffline && (
                     <div className="flex flex-col items-end">
-                        <span className={`text-[10px] font-bold font-mono ${isDamaged ? 'text-amber-500 animate-pulse' : scheme.text}`}>
+                        <span className={`text-[10px] font-bold font-mono ${isDamaged ? 'animate-pulse' : ''}`} style={{ color: isDamaged ? '#f59e0b' : currentText }}>
                             {sysState?.integrity}%
                         </span>
-                        <span className="text-[6px] opacity-60 tracking-widest">PWR_ROUTE</span>
+                        <span className="text-[6px] opacity-60 tracking-widest" style={{ color: currentText }}>PWR_ROUTE</span>
                     </div>
                 )}
             </div>
@@ -82,26 +82,26 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
             <div className="flex flex-col gap-1.5 z-10 flex-1">
                 {occupants.length === 0 ? (
                     <div className="flex items-center gap-2 opacity-40">
-                        <div className={`w-1.5 h-1.5 ${scheme.emptyBase} border`} />
-                        <span className={`text-[9px] uppercase tracking-[0.3em] font-mono ${textTheme}`}>[/ VAGO /]</span>
+                        <div className="w-1.5 h-1.5 border" style={{ backgroundColor: currentBg, borderColor: currentBorder }} />
+                        <span className="text-[9px] uppercase tracking-[0.3em] font-mono" style={{ color: currentText }}>[/ VAGO /]</span>
                     </div>
                 ) : (
                     occupants.map(occ => (
-                        <div key={occ.playerId} className={`flex items-center justify-between border-l-2 pl-2 py-0.5 ${scheme.border} border-opacity-50`}>
+                        <div key={occ.playerId} className="flex items-center justify-between border-l-2 pl-2 py-0.5" style={{ borderLeftColor: currentBorder }}>
                             <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-1.5 border ${occ.hasActed ? scheme.active : scheme.wait}`} />
-                                <span className={`text-[10px] uppercase font-bold font-mono tracking-widest ${occ.hasActed ? scheme.actedText : scheme.text}`}>
+                                <div className={`w-1.5 h-1.5 border ${!occ.hasActed ? 'animate-pulse' : ''}`} style={{ backgroundColor: occ.hasActed ? scheme.activeBg : scheme.waitBg, borderColor: occ.hasActed ? scheme.activeBorder : scheme.waitBorder }} />
+                                <span className={`text-[10px] uppercase font-bold font-mono tracking-widest`} style={{ color: occ.hasActed ? scheme.text : scheme.waitBg }}>
                                     {occ.playerName}
                                 </span>
                             </div>
-                            {occ.hasActed && <span className={`text-[8px] font-mono tracking-widest ${scheme.rdyBg} px-1 py-0.5 ${scheme.actedText}`}>RDY</span>}
+                            {occ.hasActed && <span className="text-[8px] font-mono tracking-widest px-1 py-0.5" style={{ backgroundColor: currentBg, color: currentText }}>RDY</span>}
                         </div>
                     ))
                 )}
             </div>
 
             {crewBonus && !isOffline && (
-                <div className={`mt-2 text-[8px] tracking-[0.3em] font-mono ${scheme.text} ${scheme.rdyBg} border ${scheme.border} px-2 py-1 uppercase text-center w-full`}>
+                <div className="mt-2 text-[8px] tracking-[0.3em] font-mono px-2 py-1 uppercase text-center w-full border" style={{ color: currentText, backgroundColor: currentBg, borderColor: currentBorder }}>
                     {crewBonus}
                 </div>
             )}
@@ -114,16 +114,14 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
                 </div>
             )}
             
-            {/* Corner deco crosses */}
-            <div className={`absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 ${statusBorder}`} />
-            <div className={`absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 ${statusBorder}`} />
-            <div className={`absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 ${statusBorder}`} />
-            <div className={`absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 ${statusBorder}`} />
+            <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2" style={{ borderColor: currentBorder }} />
+            <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2" style={{ borderColor: currentBorder }} />
+            <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2" style={{ borderColor: currentBorder }} />
+            <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2" style={{ borderColor: currentBorder }} />
             
-            {/* Inner micro-dots */}
-            <div className={`absolute bottom-1 right-1 w-0.5 h-0.5 bg-current opacity-50 ${textTheme}`} />
-            <div className={`absolute bottom-1 right-2 w-0.5 h-0.5 bg-current opacity-50 ${textTheme}`} />
-            <div className={`absolute bottom-1 right-3 w-0.5 h-0.5 bg-current opacity-50 ${textTheme}`} />
+            <div className="absolute bottom-1 right-1 w-0.5 h-0.5 opacity-50" style={{ backgroundColor: currentText }} />
+            <div className="absolute bottom-1 right-2 w-0.5 h-0.5 opacity-50" style={{ backgroundColor: currentText }} />
+            <div className="absolute bottom-1 right-3 w-0.5 h-0.5 opacity-50" style={{ backgroundColor: currentText }} />
         </div>
     );
 }
@@ -153,24 +151,23 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
             {flashDamage && <div className="absolute inset-0 bg-red-900/20 pointer-events-none z-10 animate-pulse" />}
 
             {/* HEADER BAR */}
-            <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-800">
+            <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-900/50">
                 <div className="flex items-center gap-3">
                     <Activity size={16} className={isCritical ? "text-red-500 animate-pulse" : "text-emerald-500"} />
                     <span className="text-[11px] font-bold tracking-[0.3em] text-emerald-400 uppercase">{ship.name}</span>
                     <span className="text-[9px] tracking-widest text-emerald-800 uppercase hidden sm:inline">| {ship.class}</span>
                 </div>
-                {/* Removed small combat pill, moving it to a centralized banner */}
             </div>
 
-            {/* COMBAT HUD BANNER */}
+            {/* COMBAT HUD BANNER (Integrated styling) */}
             {ship.combat?.isActive && (
-                <div className="border-b border-red-900/50 bg-red-950/20 p-4">
+                <div className="border-b border-zinc-800/80 bg-zinc-950/40 p-4">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                         {/* Phase Info */}
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                                <Crosshair size={14} className="text-red-500 animate-pulse" />
-                                <span className="text-xs font-bold tracking-[0.2em] uppercase text-red-500">
+                                <Crosshair size={14} className="text-zinc-400 animate-pulse" />
+                                <span className="text-xs font-bold tracking-[0.2em] uppercase text-zinc-300">
                                     RODADA {ship.combat.round} — {
                                         ship.combat.phase === 'stations' ? 'FASE ESTAÇÕES' :
                                         ship.combat.phase === 'resolution' ? 'FASE RESOLUÇÃO' :
@@ -178,7 +175,7 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                                     }
                                 </span>
                             </div>
-                            <span className="text-[10px] text-red-400/80 tracking-widest pl-5 hidden sm:inline">
+                            <span className="text-[10px] text-zinc-500 tracking-widest pl-5 hidden sm:inline">
                                 {ship.combat.phase === 'stations' ? 'Tripulação: Insira ações e rolagens nos terminais' : 
                                  ship.combat.phase === 'resolution' ? 'Diretor: Resolvendo ações e aplicando resultados' : 
                                  'Diretor: Turno inimigo e aplicação de dano final'}
@@ -186,22 +183,24 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                         </div>
 
                         {/* Crew Actions Feed */}
-                        <div className="flex flex-col flex-1 max-w-[500px] border-l border-red-900/30 pl-4 gap-1.5">
-                            <span className="text-[9px] text-red-600 font-bold uppercase tracking-widest mb-1 shadow-sm">
+                        <div className="flex flex-col flex-1 max-w-[500px] gap-1.5 md:border-l md:border-zinc-800/50 md:pl-4">
+                            <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-[0.2em] mb-1">
                                 [ LOG DE AÇÕES — RODADA ATUAL ]
                             </span>
                             {Object.values(ship.combat.actionsThisRound || {}).length === 0 ? (
-                                <span className="text-[10px] text-red-700/50 uppercase tracking-widest font-mono">
+                                <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">
                                     Aguardando submissões da tripulação...
                                 </span>
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {Object.values(ship.combat.actionsThisRound).map(action => {
-                                        const resColor = action.result === 'success' || action.result === 'critical_success' 
-                                            ? 'text-emerald-400 border-emerald-900/50 bg-emerald-950/20' 
-                                            : action.result === 'failure' || action.result === 'critical_failure'
-                                            ? 'text-red-500 border-red-900/50 bg-red-950/20' 
-                                            : 'text-amber-400 border-amber-900/50 bg-amber-950/20';
+                                        const isHit = action.result === 'success' || action.result === 'critical_success';
+                                        const isFail = action.result === 'failure' || action.result === 'critical_failure';
+                                        const resColor = isHit 
+                                            ? 'text-emerald-400 border-emerald-900/30' 
+                                            : isFail
+                                            ? 'text-red-500 border-red-900/30' 
+                                            : 'text-amber-400 border-amber-900/30';
 
                                         const roleMap: Record<string, string> = {
                                             pilot: 'PIL', gunner: 'ART', engineer: 'ENG', science: 'CIE'
@@ -210,14 +209,14 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                                         const targetName = action.targetEnemyId && ship.enemies?.[action.targetEnemyId]?.name;
 
                                         return (
-                                            <div key={action.stationRole} className={`flex flex-col p-1.5 border ${resColor} text-[9px] font-mono tracking-widest`}>
+                                            <div key={action.stationRole} className={`flex flex-col p-2 border bg-zinc-950/80 ${resColor} text-[9px] font-mono tracking-widest`}>
                                                 <div className="flex justify-between items-center mb-0.5">
                                                     <span className="font-bold opacity-80 uppercase">[{roleMap[action.stationRole]}] {action.playerName}</span>
                                                     <span className="text-[8px] opacity-60">🎲 {action.roll} vs {action.targetValue}</span>
                                                 </div>
                                                 <span className="truncate uppercase opacity-90">{action.description || action.result}</span>
                                                 {action.damageRolled !== undefined && action.damageRolled > 0 && (
-                                                    <div className="mt-0.5 pt-0.5 border-t border-red-900/30 text-amber-500 hidden sm:block">
+                                                    <div className="mt-1 pt-0.5 border-t border-current/20 hidden sm:block">
                                                         <span>🎯 {targetName || 'ALVO'} [ -{action.damageRolled} HP ]</span>
                                                     </div>
                                                 )}
