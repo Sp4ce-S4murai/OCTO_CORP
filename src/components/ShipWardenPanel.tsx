@@ -242,27 +242,41 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
                             {!ship.enemies || Object.keys(ship.enemies).length === 0 ? (
                                 <span className="text-xs text-zinc-500 font-mono">Nenhum inimigo ativo.</span>
                             ) : (
-                                Object.entries(ship.enemies).map(([eid, enemy]) => (
-                                    <div key={eid} className="flex flex-col gap-2 bg-zinc-950/80 border border-purple-900/30 p-3">
-                                        <div className="text-xs font-bold text-purple-400 uppercase flex items-center gap-2">
-                                            <span>{enemy.icon}</span> {enemy.name}
+                                Object.entries(ship.enemies).map(([eid, enemy]) => {
+                                    // Check if this enemy has already acted this round
+                                    const hasActed = Object.keys(ship.combat?.actionsThisRound || {}).some(k => k.startsWith(`enemy_${eid}`));
+
+                                    return (
+                                        <div key={eid} className={`flex flex-col gap-2 bg-zinc-950/80 border ${hasActed ? 'border-zinc-800' : 'border-purple-900/30'} p-3 transition-all`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className={`text-xs font-bold ${hasActed ? 'text-zinc-600' : 'text-purple-400'} uppercase flex items-center gap-2`}>
+                                                    <span className={hasActed ? 'grayscale opacity-50' : ''}>{enemy.icon}</span> {enemy.name}
+                                                </div>
+                                                {hasActed && <span className="text-[9px] bg-zinc-900 text-zinc-500 px-2 py-0.5 uppercase tracking-widest font-bold border border-zinc-800">DISPAROU</span>}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {enemy.weapons?.map(weapon => {
+                                                    const weaponKey = `enemy_${eid}_${weapon.id}`;
+                                                    const hasFiredThisWeapon = Object.keys(ship.combat?.actionsThisRound || {}).includes(weaponKey);
+                                                    
+                                                    return (
+                                                        <button
+                                                            key={weapon.id}
+                                                            onClick={() => triggerEnemyAttack(roomId, eid, weapon.id)}
+                                                            disabled={hasActed}
+                                                            className={`${hasActed ? 'bg-zinc-950 text-zinc-700 border-zinc-900' : 'bg-purple-950/50 hover:bg-purple-900 text-purple-300 border-purple-800'} px-3 py-1.5 text-[10px] font-mono tracking-widest flex items-center gap-2 transition-colors uppercase disabled:cursor-not-allowed`}
+                                                        >
+                                                            <Zap size={10} /> {weapon.name} ({weapon.damage})
+                                                        </button>
+                                                    );
+                                                })}
+                                                {(!enemy.weapons || enemy.weapons.length === 0) && (
+                                                    <span className="text-[10px] text-zinc-600 font-mono">Sem armas cadastradas.</span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {enemy.weapons?.map(weapon => (
-                                                <button
-                                                    key={weapon.id}
-                                                    onClick={() => triggerEnemyAttack(roomId, eid, weapon.id)}
-                                                    className="bg-purple-950/50 hover:bg-purple-900 text-purple-300 border border-purple-800 px-3 py-1.5 text-[10px] font-mono tracking-widest flex items-center gap-2 transition-colors uppercase"
-                                                >
-                                                    <Zap size={10} /> {weapon.name} ({weapon.damage})
-                                                </button>
-                                            ))}
-                                            {(!enemy.weapons || enemy.weapons.length === 0) && (
-                                                <span className="text-[10px] text-zinc-600 font-mono">Sem armas cadastradas.</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     )}

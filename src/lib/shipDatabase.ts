@@ -470,6 +470,21 @@ export const triggerEnemyAttack = async (roomId: string, enemyId: string, weapon
     }
 
     if (effectiveDamage <= 0) {
+        
+        const enemyAction: ShipAction = {
+            type: 'fire',
+            stationRole: 'enemy',
+            playerId: enemyId,
+            playerName: enemy.name,
+            targetValue: 0,
+            roll: rawDamage,
+            result: 'failure',
+            description: `Disparou ${weapon.name} (Repelido)`,
+            damageRolled: 0,
+        };
+        const actionKey = `enemy_${enemyId}_${weaponId}`;
+        await update(ref(database, `${shipPath(roomId)}/combat/actionsThisRound/${actionKey}`), enemyAction);
+
         await pushLog(roomId, {
             timestamp: Date.now(),
             playerName: "SISTEMA NAVE",
@@ -512,6 +527,23 @@ export const triggerEnemyAttack = async (roomId: string, enemyId: string, weapon
         severity: newHp <= ship.hp.max * 0.25 ? 'catastrophic' : newHp <= ship.hp.max * 0.5 ? 'critical' : 'warning',
         message: hitMsg,
     });
+
+    // Public Action Feed
+    const enemyAction: ShipAction = {
+        type: 'fire',
+        stationRole: 'enemy',
+        playerId: enemyId,
+        playerName: enemy.name,
+        targetValue: 0,
+        roll: rawDamage,
+        result: effectiveDamage > 0 ? 'success' : 'failure',
+        description: `Disparou ${weapon.name}`,
+        damageRolled: effectiveDamage,
+    };
+    
+    // Save to actionsThisRound
+    const actionKey = `enemy_${enemyId}_${weaponId}`;
+    await update(ref(database, `${shipPath(roomId)}/combat/actionsThisRound/${actionKey}`), enemyAction);
 
     // Log
     await pushLog(roomId, {

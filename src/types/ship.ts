@@ -1,4 +1,4 @@
-export type StationRole = 'pilot' | 'gunner' | 'engineer' | 'science' | 'unassigned';
+export type StationRole = 'pilot' | 'gunner' | 'engineer' | 'science' | 'unassigned' | 'enemy';
 
 export interface ShipStats {
     armor: number;       // AR — reduz dano recebido

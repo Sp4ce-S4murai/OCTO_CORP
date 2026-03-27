@@ -203,7 +203,7 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                                             : 'text-amber-400 border-amber-900/30';
 
                                         const roleMap: Record<string, string> = {
-                                            pilot: 'PIL', gunner: 'ART', engineer: 'ENG', science: 'CIE'
+                                            pilot: 'PIL', gunner: 'ART', engineer: 'ENG', science: 'CIE', enemy: 'INI'
                                         };
 
                                         const targetName = action.targetEnemyId && ship.enemies?.[action.targetEnemyId]?.name;
