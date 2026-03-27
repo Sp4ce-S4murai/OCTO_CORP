@@ -380,21 +380,23 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                             {Object.entries(STATION_META).map(([key, meta]) => {
                                 const station = (ship.stations || {})[key];
                                 const occupants = station?.occupants ? Object.values(station.occupants) : [];
-                                const cm = { blue: 'border-blue-800/80 text-blue-400', red: 'border-red-800/80 text-red-400', amber: 'border-amber-800/80 text-amber-400', purple: 'border-purple-800/80 text-purple-400' }[meta.color as string] || '';
-                                const bgHv = { blue: 'hover:bg-blue-950/30 hover:border-blue-600', red: 'hover:bg-red-950/30 hover:border-red-600', amber: 'hover:bg-amber-950/30 hover:border-amber-600', purple: 'hover:bg-purple-950/30 hover:border-purple-600' }[meta.color as string] || '';
+                                const baseColor = meta.color.replace('text-', '').replace('-400', ''); // extracts 'blue', 'red', etc
+                                const hoverBorder = meta.borderColor.replace('800', '600');
+                                const cornerClass = meta.borderColor.replace('800', '500');
+                                
                                 const crewBonus = occupants.length >= 2 ? meta.crewBonuses.find(b => b.count <= occupants.length + 1)?.label : null;
                                 return (
                                     <button
                                         key={key}
                                         onClick={() => setPreviewStation(key)}
-                                        className={`relative flex flex-col px-4 py-3 border transition-colors cursor-pointer ${cm} bg-zinc-950/80 group ${bgHv}`}
+                                        className={`relative flex flex-col px-4 py-3 border transition-colors cursor-pointer ${meta.borderColor}/80 ${meta.color} bg-zinc-950/80 group hover:${meta.bgColor.replace('20', '30')} hover:${hoverBorder}`}
                                     >
                                         <div className="flex justify-between items-start w-full mb-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="opacity-80 group-hover:animate-pulse">{meta.icon}</span>
                                                 <span className="text-[11px] font-bold tracking-[0.2em] uppercase">{meta.label}</span>
                                             </div>
-                                            <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] opacity-50 ${meta.color.replace('text-', 'bg-')}`} />
+                                            <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] opacity-50 bg-current group-hover:opacity-100 transition-opacity`} />
                                         </div>
 
                                         <div className="w-full text-left border-t border-zinc-900/80 pt-2 flex flex-col gap-2">
@@ -416,8 +418,8 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                                         </div>
                                         
                                         {/* Corners */}
-                                        <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${cm.split(' ')[0]} -translate-x-[1px] -translate-y-[1px]`} />
-                                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${cm.split(' ')[0]} translate-x-[1px] translate-y-[1px]`} />
+                                        <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${cornerClass} -translate-x-[1px] -translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
+                                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${cornerClass} translate-x-[1px] translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
                                     </button>
                                 );
                             })}
@@ -467,10 +469,12 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                     <span className="text-[10px] font-bold tracking-widest uppercase">
                         {isStationsPhase 
                             ? `RODADA ${ship.combat?.round} — FASE DE ESTAÇÕES` 
-                            : `RODADA ${ship.combat?.round} — AGUARDANDO RESOLUÇÃO`}
+                            : ship.combat?.phase === 'resolution'
+                            ? `RODADA ${ship.combat?.round} — FASE DE RESOLUÇÃO`
+                            : `RODADA ${ship.combat?.round} — FASE DE DANO`}
                     </span>
                     {!isStationsPhase && (
-                        <span className="ml-auto text-[8px] font-mono opacity-70">AÇÕES BLOQUEADAS: RESOLUÇÃO/DANO EM ANDAMENTO</span>
+                        <span className="ml-auto text-[8px] font-mono text-zinc-400 font-bold uppercase tracking-widest border border-zinc-700 bg-zinc-900 px-2 py-0.5">ESTAÇÃO BLOQUEADA</span>
                     )}
                 </div>
             )}
@@ -515,9 +519,9 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             )}
 
             {/* Already acted */}
-            {alreadyActed && (
-                <div className="border border-emerald-900/50 bg-emerald-950/20 p-3 text-center">
-                    <span className="text-xs font-bold tracking-widest text-emerald-500 uppercase">✓ AÇÃO SUBMETIDA — AGUARDANDO RESOLUÇÃO</span>
+            {alreadyActed && isStationsPhase && (
+                <div className="border border-emerald-900/50 bg-emerald-950/20 p-3 text-center mb-4">
+                    <span className="text-xs font-bold tracking-widest text-emerald-500 uppercase">✓ AÇÃO SUBMETIDA — AGUARDANDO TURNO DO DIRETOR</span>
                 </div>
             )}
 
