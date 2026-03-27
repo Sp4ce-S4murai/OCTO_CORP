@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ShipState, SHIP_PRESETS, ENEMY_PRESETS, ShipTemplate, EnemyShip } from "@/types/ship";
-import { createShip, deleteShip, addEnemyShip, removeEnemyShip, applyShipDamage, damageSystem, drainResource, startShipCombat, endShipCombat, advanceShipPhase, updateShipField, pushShipAlert, clearAlerts, refillResource } from "@/lib/shipDatabase";
+import { createShip, deleteShip, addEnemyShip, removeEnemyShip, applyShipDamage, damageSystem, drainResource, startShipCombat, endShipCombat, advanceShipPhase, updateShipField, pushShipAlert, clearAlerts, refillResource, triggerEnemyAttack } from "@/lib/shipDatabase";
 import { pushLog } from "@/lib/database";
 import { Shield, Trash2, Plus, Crosshair, Zap, AlertTriangle, Play, Square, SkipForward, Fuel, Wind, CircleDot, Wrench } from "lucide-react";
 
@@ -18,6 +18,9 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
     const [manualDamage, setManualDamage] = useState("");
     const [damageTarget, setDamageTarget] = useState("hull");
     const [drainAmount, setDrainAmount] = useState("10");
+
+    const pilotAction = ship?.combat?.actionsThisRound?.pilot;
+    const pilotEvaded = pilotAction && (pilotAction.result === 'success' || pilotAction.result === 'critical_success');
 
     const handleCreateShip = () => {
         const template = SHIP_PRESETS[selectedPreset];
@@ -218,6 +221,53 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
                     )}
                 </div>
             </div>
+
+            {/* ENEMY ATTACK RESOLUTION (DAMAGE PHASE ONLY) */}
+            {ship.combat?.isActive && ship.combat.phase === 'damage' && (
+                <div className="border border-purple-900/30 bg-purple-950/10 p-4 flex flex-col gap-3">
+                    <h3 className="text-sm font-bold tracking-widest text-purple-500 uppercase flex items-center gap-2">
+                        <Crosshair size={16} /> RESOLUÇÃO DE DANO INIMIGO
+                    </h3>
+                    
+                    {pilotEvaded ? (
+                        <div className="bg-emerald-950/30 border border-emerald-900/50 p-3 text-emerald-400 text-xs font-mono font-bold tracking-widest text-center shadow-lg">
+                            A NAVE EVADIU COM SUCESSO. ATAQUES INIMIGOS FALHAM NESTA RODADA.
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            <span className="text-[10px] text-purple-400/80 uppercase tracking-widest border-b border-purple-900/30 pb-2">
+                                A manobra de evasão falhou ou não foi realizada. Rolagem de dano dos inimigos:
+                            </span>
+                            
+                            {!ship.enemies || Object.keys(ship.enemies).length === 0 ? (
+                                <span className="text-xs text-zinc-500 font-mono">Nenhum inimigo ativo.</span>
+                            ) : (
+                                Object.entries(ship.enemies).map(([eid, enemy]) => (
+                                    <div key={eid} className="flex flex-col gap-2 bg-zinc-950/80 border border-purple-900/30 p-3">
+                                        <div className="text-xs font-bold text-purple-400 uppercase flex items-center gap-2">
+                                            <span>{enemy.icon}</span> {enemy.name}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {enemy.weapons?.map(weapon => (
+                                                <button
+                                                    key={weapon.id}
+                                                    onClick={() => triggerEnemyAttack(roomId, eid, weapon.id)}
+                                                    className="bg-purple-950/50 hover:bg-purple-900 text-purple-300 border border-purple-800 px-3 py-1.5 text-[10px] font-mono tracking-widest flex items-center gap-2 transition-colors uppercase"
+                                                >
+                                                    <Zap size={10} /> {weapon.name} ({weapon.damage})
+                                                </button>
+                                            ))}
+                                            {(!enemy.weapons || enemy.weapons.length === 0) && (
+                                                <span className="text-[10px] text-zinc-600 font-mono">Sem armas cadastradas.</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ENEMY MANAGEMENT */}
             <div className="border border-orange-900/30 bg-orange-950/10 p-4 flex flex-col gap-3">

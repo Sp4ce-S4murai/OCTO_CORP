@@ -443,6 +443,88 @@ export const revealEnemy = async (roomId: string, enemyId: string) => {
     await update(enemyRef, { revealed: true });
 };
 
+export const triggerEnemyAttack = async (roomId: string, enemyId: string, weaponId: string) => {
+    const shipRef = ref(database, shipPath(roomId));
+    const snapshot = await get(shipRef);
+    const ship = snapshot.val() as ShipState | null;
+    if (!ship || !ship.enemies || !ship.enemies[enemyId]) return;
+
+    const enemy = ship.enemies[enemyId];
+    const weapon = enemy.weapons?.find(w => w.id === weaponId);
+    if (!weapon) return;
+
+    // Roll damage
+    const rawDamage = rollDice(weapon.damage);
+    const effectiveDamage = Math.max(0, rawDamage - Math.floor(ship.stats.armor / 10));
+
+    // Hit location (1-100)
+    const locRoll = Math.floor(Math.random() * 100) + 1;
+    let targetArea = 'hull';
+    let systemKey = '';
+    
+    if (locRoll > 60) {
+        if (locRoll <= 70) { targetArea = 'system'; systemKey = 'weapons'; }
+        else if (locRoll <= 80) { targetArea = 'system'; systemKey = 'propulsion'; }
+        else if (locRoll <= 90) { targetArea = 'system'; systemKey = 'sensors'; }
+        else { targetArea = 'system'; systemKey = 'lifeSupport'; }
+    }
+
+    if (effectiveDamage <= 0) {
+        await pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: "SISTEMA NAVE",
+            playerId: "SHIP",
+            statName: `ATAQUE INIMIGO (${weapon.name}) REPELIDO PELA ARMADURA DA NAVE`,
+            statValue: 0, roll: rawDamage, result: 'Ship Fire'
+        });
+        return;
+    }
+
+    // Apply the damage to HP
+    const newHp = Math.max(0, ship.hp.current - effectiveDamage);
+    const updates: Record<string, unknown> = { 'hp/current': newHp };
+    await update(shipRef, updates);
+
+    // Propagate stress
+    await propagateHullStress(roomId, effectiveDamage);
+
+    let hitMsg = `IMPACTO NO CASCO: ${effectiveDamage} dano (${enemy.name})`;
+    let logStatName = `ATAQUE INIMIGO: DANO NO CASCO (${effectiveDamage})`;
+
+    if (targetArea === 'system' && systemKey) {
+        const sysNames: Record<string, string> = { propulsion: 'PROPULSÃO', lifeSupport: 'SUPORTE DE VIDA', weapons: 'ARMAMENTO', sensors: 'SENSORES' };
+        hitMsg = `IMPACTO CRÍTICO: ${effectiveDamage} dano no sistema de ${sysNames[systemKey]} (${enemy.name})`;
+        logStatName = `ATAQUE INIMIGO: ACERTOU ${sysNames[systemKey]} (${effectiveDamage})`;
+        
+        // Damage the specific system
+        const sysState = ship.systems[systemKey as keyof typeof ship.systems];
+        if (sysState) {
+            const integrityLoss = effectiveDamage * 5; // Scaling damage to integrity %
+            await damageSystem(roomId, systemKey, integrityLoss); // This also pushes a log for system damage
+        }
+    }
+
+    // Alert
+    const alertId = `alert_${Date.now()}`;
+    await update(ref(database, `${shipPath(roomId)}/alerts/${alertId}`), {
+        id: alertId,
+        timestamp: Date.now(),
+        severity: newHp <= ship.hp.max * 0.25 ? 'catastrophic' : newHp <= ship.hp.max * 0.5 ? 'critical' : 'warning',
+        message: hitMsg,
+    });
+
+    // Log
+    await pushLog(roomId, {
+        timestamp: Date.now(),
+        playerName: "SISTEMA NAVE",
+        playerId: "SHIP",
+        statName: logStatName,
+        statValue: effectiveDamage,
+        roll: rawDamage,
+        result: 'Ship Damage',
+    });
+};
+
 // --- DICE HELPERS ---
 
 export const rollDice = (notation: string): number => {
