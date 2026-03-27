@@ -57,6 +57,8 @@ export interface ShipAction {
     playerName: string;
     weaponId?: string;
     targetSystem?: string;
+    targetEnemyId?: string; // New: which enemy was targeted by gunner/scientist
+    damageRolled?: number;  // New: exact damage rolled for UI
     roll?: number;
     targetValue?: number;
     result?: 'pending' | 'success' | 'failure' | 'critical_success' | 'critical_failure';

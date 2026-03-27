@@ -197,6 +197,8 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                                             pilot: 'PIL', gunner: 'ART', engineer: 'ENG', science: 'CIE'
                                         };
 
+                                        const targetName = action.targetEnemyId && ship.enemies?.[action.targetEnemyId]?.name;
+
                                         return (
                                             <div key={action.stationRole} className={`flex flex-col p-1.5 border ${resColor} text-[9px] font-mono tracking-widest`}>
                                                 <div className="flex justify-between items-center mb-0.5">
@@ -204,6 +206,11 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                                                     <span className="text-[8px] opacity-60">🎲 {action.roll} vs {action.targetValue}</span>
                                                 </div>
                                                 <span className="truncate uppercase opacity-90">{action.description || action.result}</span>
+                                                {action.damageRolled !== undefined && action.damageRolled > 0 && (
+                                                    <div className="mt-0.5 pt-0.5 border-t border-red-900/30 text-amber-500 hidden sm:block">
+                                                        <span>🎯 {targetName || 'ALVO'} [ -{action.damageRolled} HP ]</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

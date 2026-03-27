@@ -225,8 +225,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const [previewStation, setPreviewStation] = useState<string | null>(null);
     const [selectedWeaponId, setSelectedWeaponId] = useState<string>("");
     const [rollInput, setRollInput] = useState("");
-
-    // Find which station this player occupies
+    const [targetEnemyId, setTargetEnemyId] = useState<string>("");
     const myStationEntry = Object.entries(ship.stations || {}).find(([, s]) => s.occupants && s.occupants[playerId]);
     const myStationKey = myStationEntry?.[0];
     const myStation = myStationEntry?.[1];
@@ -262,8 +261,9 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const scienceSkill = getSkillBonus(['Computação', 'Física Xenobiologia']);
 
     const enemiesOut = ship.enemies ? Object.values(ship.enemies) : [];
-    const primaryEnemy = enemiesOut[0];
-    const enemyAR = primaryEnemy ? primaryEnemy.stats.armor : 0;
+    // Only set a primaryEnemy if nothing is selected or if the selected one is gone
+    const activeEnemy = enemiesOut.find(e => e.id === targetEnemyId) || enemiesOut[0];
+    const enemyAR = activeEnemy ? activeEnemy.stats.armor : 0;
 
     const pilotTarget = Math.min(99, ship.stats.speed + pilotSkill + (crewAtMyStation >= 2 ? 10 : 0));
     const gunnerTarget = Math.max(1, ship.stats.combat + gunnerSkill - Math.floor(enemyAR / 5));
@@ -317,10 +317,10 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         if (isHit) {
             damage = rollDice(weapon.damage);
             if (isCritical) damage = Math.floor(damage * 1.5);
-            if (primaryEnemy) await applyEnemyDamage(roomId, primaryEnemy.id, damage);
+            if (activeEnemy) await applyEnemyDamage(roomId, activeEnemy.id, damage);
         }
         await drainResource(roomId, 'ammo', weapon.ammoCost);
-        const action: ShipAction = { type: 'fire', stationRole: 'gunner', playerId, playerName: character.name, weaponId: selectedWeaponId, roll, targetValue: target, result, description: isHit ? `${weapon.name}: ${damage} dano` : `${weapon.name}: Disparo perdido` };
+        const action: ShipAction = { type: 'fire', stationRole: 'gunner', playerId, playerName: character.name, weaponId: selectedWeaponId, targetEnemyId: activeEnemy?.id, damageRolled: damage, roll, targetValue: target, result, description: isHit ? `${weapon.name}: ${damage} de dano em ${activeEnemy?.name}` : `${weapon.name}: Errou ${activeEnemy?.name}` };
         await submitShipAction(roomId, myStationKey!, 'gunner', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `DISPARO ${weapon.name.toUpperCase()} (alvo: ≤${target})`, statValue: damage, roll, result: isHit ? 'Ship Fire' : 'Ship Damage' });
     };
@@ -342,11 +342,10 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         const autoScan = crewAtMyStation >= 2 && ship.stats.sensors > 40;
         const target = scienceTarget;
         const { roll, isHit } = autoScan ? { roll: 1, isHit: true } : doRoll(target);
-        if (isHit && ship.enemies) {
-            const unrevealed = Object.values(ship.enemies).filter(e => !e.revealed);
-            if (unrevealed.length > 0) await revealEnemy(roomId, unrevealed[0].id);
+        if (isHit && activeEnemy) {
+            await revealEnemy(roomId, activeEnemy.id);
         }
-        const action: ShipAction = { type: 'scan', stationRole: 'science', playerId, playerName: character.name, roll, targetValue: target, result: isHit ? 'success' : 'failure', description: isHit ? 'Scan concluído — dados revelados' : 'Interferência — scan falhou' };
+        const action: ShipAction = { type: 'scan', stationRole: 'science', playerId, playerName: character.name, targetEnemyId: activeEnemy?.id, roll, targetValue: target, result: isHit ? 'success' : 'failure', description: isHit ? `Scan: ${activeEnemy?.name} revelado` : 'Interferência — scan falhou' };
         await submitShipAction(roomId, myStationKey!, 'science', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `SCAN${autoScan ? ' AUTOMÁTICO' : ''} (alvo: ≤${target})`, statValue: target, roll, result: isHit ? 'Ship Scan' : 'Ship Damage' });
     };
@@ -524,8 +523,67 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
 
             {/* Not in combat */}
             {!isCombatActive && (
-                <div className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold border border-zinc-800 bg-zinc-900/30 px-3 py-2">
+                <div className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold border border-zinc-800 bg-zinc-900/30 px-3 py-2 mb-4">
                     Estação operacional — aguardando início de combate.
+                </div>
+            )}
+
+            {/* RESOLUTION PHASE VIEW */}
+            {isCombatActive && !isStationsPhase && (
+                <div className="mb-4">
+                    {(() => {
+                        const myActionInfo = ship.combat?.actionsThisRound?.[stationRole];
+                        if (!myActionInfo) return (
+                            <div className={`p-4 border ${stationMeta.borderColor} text-zinc-500 font-mono text-[10px] tracking-widest uppercase bg-zinc-950/50`}>
+                                NENHUMA AÇÃO SUBMETIDA NESTE POSTO NA ÚLTIMA FASE.
+                            </div>
+                        );
+
+                        const isHit = myActionInfo.result === 'success' || myActionInfo.result === 'critical_success';
+                        const resColors = isHit 
+                            ? `${stationMeta.borderColor} ${stationMeta.bgColor} text-emerald-400 border-2` 
+                            : `border-red-900/50 bg-red-950/20 text-red-500`;
+                            
+                        const targetName = myActionInfo.targetEnemyId && ship.enemies?.[myActionInfo.targetEnemyId]?.name;
+
+                        return (
+                            <div className={`p-4 flex flex-col gap-2 ${resColors}`}>
+                                <h4 className="text-[11px] font-bold tracking-[0.2em] uppercase text-zinc-300 border-b border-zinc-800/50 pb-1 mb-1">
+                                    [ RESULTADO DA AÇÃO: {myActionInfo.type.toUpperCase()} ]
+                                </h4>
+                                <div className="flex justify-between items-center text-[10px] font-mono tracking-widest">
+                                    <span className="opacity-80 text-zinc-400">OPERADOR:</span>
+                                    <span className="font-bold">{myActionInfo.playerName}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] font-mono tracking-widest">
+                                    <span className="opacity-80 text-zinc-400">DADO ROLADO vs ALVO:</span>
+                                    <span className="font-bold">{myActionInfo.roll} vs ≤ {myActionInfo.targetValue}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] font-mono tracking-widest">
+                                    <span className="opacity-80 text-zinc-400">STATUS:</span>
+                                    <span className="font-bold">{isHit ? 'SUCESSO' : 'FALHA'}</span>
+                                </div>
+
+                                {/* Extra details based on action type */}
+                                {targetName && (
+                                    <div className="flex justify-between items-center text-[10px] font-mono tracking-widest mt-1 pt-1 border-t border-zinc-800/50">
+                                        <span className="opacity-80 text-zinc-400">ALVO MIRADO:</span>
+                                        <span className="font-bold text-amber-500 uppercase">{targetName}</span>
+                                    </div>
+                                )}
+                                {myActionInfo.damageRolled !== undefined && myActionInfo.damageRolled > 0 && (
+                                    <div className="flex justify-between items-center text-[10px] font-mono tracking-widest">
+                                        <span className="opacity-80 text-red-400">DANO COMPUTADO:</span>
+                                        <span className="font-bold text-red-500 text-xs">{myActionInfo.damageRolled}</span>
+                                    </div>
+                                )}
+
+                                <div className="mt-2 text-[11px] font-bold uppercase tracking-widest bg-black/40 p-2 text-center text-zinc-300 border border-zinc-800/50">
+                                    {myActionInfo.description}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -550,7 +608,23 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                         ALVO DISPARO: ≤{gunnerTarget} <br/>
                         <span className="text-[8px] text-zinc-500 font-mono">(CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}) | MUN: {ship.resources.ammo.current}</span>
                     </div>
-                    <div className="flex flex-col gap-1.5">
+
+                    {/* Enemy Targeting */}
+                    {enemiesOut.length > 0 && (
+                        <div className="flex flex-col gap-1.5 mt-1 border border-zinc-800 p-2 bg-zinc-950/50">
+                            <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">SELECIONAR ALVO:</span>
+                            {enemiesOut.map(enemy => (
+                                <label key={enemy.id} className={`flex items-center gap-2 px-2 py-1.5 border cursor-pointer transition ${targetEnemyId === enemy.id || (!targetEnemyId && activeEnemy.id === enemy.id) ? 'border-amber-600 bg-amber-950/30 text-amber-500' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500 hover:border-amber-900/40'}`}>
+                                    <input type="radio" name="enemyTarget" value={enemy.id} checked={targetEnemyId === enemy.id || (!targetEnemyId && activeEnemy.id === enemy.id)} onChange={() => setTargetEnemyId(enemy.id)} className="hidden" />
+                                    <span className="text-[14px]">{enemy.icon}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest flex-1">{enemy.name}</span>
+                                    <span className="text-[8px] font-mono text-zinc-600 uppercase border-l border-zinc-800 pl-2">AR: {enemy.stats.armor}</span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex flex-col gap-1.5 mt-2">
                         {Object.entries(ship.weapons).map(([wId, weapon]) => (
                             <label key={wId} className={`flex items-center gap-3 px-3 py-2 border cursor-pointer transition ${selectedWeaponId === wId ? 'border-red-600 bg-red-950/40 text-red-300' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500 hover:border-red-900/60'} ${weapon.currentCooldown > 0 ? 'opacity-30 cursor-not-allowed' : ''}`}>
                                 <input type="radio" name="weapon" value={wId} checked={selectedWeaponId === wId} onChange={() => setSelectedWeaponId(wId)} disabled={weapon.currentCooldown > 0} className="hidden" />
@@ -600,18 +674,26 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                         ALVO SCAN: ≤{scienceTarget} {crewAtMyStation >= 2 && ship.stats.sensors > 40 ? '— (SCAN AUTOMÁTICO ATIVO)' : ''} <br/>
                         <span className="text-[8px] text-zinc-500 font-mono">(SNS:{ship.stats.sensors} + SKILL:{scienceSkill})</span>
                     </div>
-                    {ship.enemies && Object.values(ship.enemies).map(enemy => (
-                        <div key={enemy.id} className={`border border-zinc-900 bg-zinc-950/50 px-3 py-2`}>
-                            <div className="flex items-center gap-2">
-                                <span>{enemy.icon}</span>
-                                <span className={`text-[11px] font-bold uppercase tracking-widest ${enemy.revealed ? 'text-purple-400' : 'text-zinc-500'}`}>{enemy.name}</span>
-                                {enemy.revealed
-                                    ? <span className="text-[9px] text-purple-600 font-mono tracking-widest ml-auto">HP:{enemy.hp.current}/{enemy.hp.max} AR:{enemy.stats.armor} CBT:{enemy.stats.combat}</span>
-                                    : <span className="text-[9px] text-zinc-600 font-mono tracking-widest ml-auto bg-zinc-900 px-2">DADOS CRIPTOGRAFADOS</span>
-                                }
-                            </div>
+
+                    {/* Enemy Targeting for Sci */}
+                    {enemiesOut.length > 0 && (
+                        <div className="flex flex-col gap-1.5 border border-zinc-800 p-2 bg-zinc-950/50">
+                            <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">ALVO DO ESCANEAMENTO:</span>
+                            {enemiesOut.map(enemy => (
+                                <label key={enemy.id} className={`flex items-center gap-2 px-2 py-1.5 border cursor-pointer transition ${targetEnemyId === enemy.id || (!targetEnemyId && activeEnemy.id === enemy.id) ? 'border-purple-600 bg-purple-950/30 text-purple-400' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500 hover:border-purple-900/40'}`}>
+                                    <input type="radio" name="sciTarget" value={enemy.id} checked={targetEnemyId === enemy.id || (!targetEnemyId && activeEnemy.id === enemy.id)} onChange={() => setTargetEnemyId(enemy.id)} className="hidden" />
+                                    <span className="text-[14px]">{enemy.icon}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest flex-1">{enemy.name}</span>
+                                    {enemy.revealed ? (
+                                        <span className="text-[8px] text-purple-600 font-mono tracking-widest border-l border-zinc-800 pl-2">HP:{enemy.hp.current} AR:{enemy.stats.armor}</span>
+                                    ) : (
+                                        <span className="text-[8px] text-zinc-600 font-mono tracking-widest border-l border-zinc-800 pl-2">CRIPTOGRAFADO</span>
+                                    )}
+                                </label>
+                            ))}
                         </div>
-                    ))}
+                    )}
+                    
                     <button onClick={handleScan} disabled={ship.systems.sensors.status === 'offline'}
                         className="bg-purple-950/30 hover:bg-purple-900/60 text-purple-400 border border-purple-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition text-[10px] uppercase mt-2 disabled:opacity-30 disabled:cursor-not-allowed">
                         <Radio size={14} /> VARREDURA DE SENSORES
