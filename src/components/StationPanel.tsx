@@ -265,10 +265,10 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const activeEnemy = enemiesOut.find(e => e.id === targetEnemyId) || enemiesOut[0];
     const enemyAR = activeEnemy ? activeEnemy.stats.armor : 0;
 
-    const pilotTarget = Math.min(99, ship.stats.speed + pilotSkill + (crewAtMyStation >= 2 ? 10 : 0));
-    const gunnerTarget = Math.max(1, ship.stats.combat + gunnerSkill - Math.floor(enemyAR / 5));
-    const engineerTarget = Math.min(99, character.stats.intellect + engineerSkill);
-    const scienceTarget = Math.min(99, ship.stats.sensors + scienceSkill);
+    const pilotTarget = Math.min(99, ship.stats.speed + pilotSkill + (crewAtMyStation >= 2 ? 10 : 0) - (ship.systems.propulsion.status === 'damaged' ? 20 : 0));
+    const gunnerTarget = Math.max(1, ship.stats.combat + gunnerSkill - Math.floor(enemyAR / 5) - (ship.systems.weapons.status === 'damaged' ? 20 : 0));
+    const engineerTarget = Math.min(99, character.stats.intellect + engineerSkill); // Engineers repair, they use their own intellect
+    const scienceTarget = Math.min(99, ship.stats.sensors + scienceSkill - (ship.systems.sensors.status === 'damaged' ? 20 : 0));
 
 
     // d100 roll helper
@@ -611,10 +611,14 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-blue-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-blue-900 pl-2">
                         ALVO EVASÃO: ≤{pilotTarget} <br/> 
-                        <span className="text-[8px] text-zinc-500 font-mono">(SPD:{ship.stats.speed} + SKILL:{pilotSkill} {crewAtMyStation >= 2 ? '+ CREW:10' : ''}) | COMB: {ship.resources.fuel.current}</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">
+                            (SPD:{ship.stats.speed} + SKILL:{pilotSkill} {crewAtMyStation >= 2 ? '+ CREW:10' : ''} 
+                            {ship.systems.propulsion.status === 'damaged' ? <span className="text-amber-500"> - PROPULSÃO DANIFICADA:-20</span> : ''}) 
+                            | COMB: {ship.resources.fuel.current}
+                        </span>
                     </div>
-                    <button onClick={handleEvade}
-                        className="bg-blue-950/30 hover:bg-blue-900/60 text-blue-400 border border-blue-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition uppercase text-[10px]">
+                    <button onClick={handleEvade} disabled={ship.systems.propulsion.status === 'offline'}
+                        className="bg-blue-950/30 hover:bg-blue-900/60 text-blue-400 border border-blue-800/60 px-4 py-3 font-bold tracking-[0.3em] flex items-center justify-center gap-3 transition uppercase text-[10px] disabled:opacity-30 disabled:cursor-not-allowed">
                         <Navigation size={14} /> MANOBRA EVASIVA {crewAtMyStation >= 3 ? '(VANTAGEM)' : ''}
                     </button>
                 </div>
@@ -625,7 +629,11 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-red-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-red-900 pl-2">
                         ALVO DISPARO: ≤{gunnerTarget} <br/>
-                        <span className="text-[8px] text-zinc-500 font-mono">(CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}) | MUN: {ship.resources.ammo.current}</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">
+                            (CBT:{ship.stats.combat} + SKILL:{gunnerSkill} - AR:{Math.floor(enemyAR/5)}
+                            {ship.systems.weapons.status === 'damaged' ? <span className="text-amber-500"> - ARMAS DANIFICADAS:-20</span> : ''}) 
+                            | MUN: {ship.resources.ammo.current}
+                        </span>
                     </div>
 
                     {/* Enemy Targeting */}
@@ -691,7 +699,10 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                 <div className="flex flex-col gap-3">
                     <div className="text-[10px] text-purple-600/80 font-bold uppercase tracking-[0.2em] border-l-2 border-purple-900 pl-2 mb-1">
                         ALVO SCAN: ≤{scienceTarget} {crewAtMyStation >= 2 && ship.stats.sensors > 40 ? '— (SCAN AUTOMÁTICO ATIVO)' : ''} <br/>
-                        <span className="text-[8px] text-zinc-500 font-mono">(SNS:{ship.stats.sensors} + SKILL:{scienceSkill})</span>
+                        <span className="text-[8px] text-zinc-500 font-mono">
+                            (SNS:{ship.stats.sensors} + SKILL:{scienceSkill}
+                            {ship.systems.sensors.status === 'damaged' ? <span className="text-amber-500"> - SENSORES DANIFICADOS:-20</span> : ''})
+                        </span>
                     </div>
 
                     {/* Enemy Targeting for Sci */}
