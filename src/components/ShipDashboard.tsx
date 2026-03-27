@@ -149,17 +149,70 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
                     <span className="text-[11px] font-bold tracking-[0.3em] text-emerald-400 uppercase">{ship.name}</span>
                     <span className="text-[9px] tracking-widest text-emerald-800 uppercase hidden sm:inline">| {ship.class}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                    {ship.combat?.isActive && (
-                        <div className="flex items-center gap-2 border border-red-900/50 bg-red-950/20 px-3 py-1">
-                            <Crosshair size={11} className="text-red-500 animate-pulse" />
-                            <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-red-500">
-                                COMBATE ACIONADO [ R{ship.combat.round} ]
+                {/* Removed small combat pill, moving it to a centralized banner */}
+            </div>
+
+            {/* COMBAT HUD BANNER */}
+            {ship.combat?.isActive && (
+                <div className="border-b border-red-900/50 bg-red-950/20 p-4">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        {/* Phase Info */}
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                                <Crosshair size={14} className="text-red-500 animate-pulse" />
+                                <span className="text-xs font-bold tracking-[0.2em] uppercase text-red-500">
+                                    RODADA {ship.combat.round} — {
+                                        ship.combat.phase === 'stations' ? 'FASE ESTAÇÕES' :
+                                        ship.combat.phase === 'resolution' ? 'FASE RESOLUÇÃO' :
+                                        'FASE DE DANO/INIMIGOS'
+                                    }
+                                </span>
+                            </div>
+                            <span className="text-[10px] text-red-400/80 tracking-widest pl-5 hidden sm:inline">
+                                {ship.combat.phase === 'stations' ? 'Tripulação: Insira ações e rolagens nos terminais' : 
+                                 ship.combat.phase === 'resolution' ? 'Diretor: Resolvendo ações e aplicando resultados' : 
+                                 'Diretor: Turno inimigo e aplicação de dano final'}
                             </span>
                         </div>
-                    )}
+
+                        {/* Crew Actions Feed */}
+                        <div className="flex flex-col flex-1 max-w-[500px] border-l border-red-900/30 pl-4 gap-1.5">
+                            <span className="text-[9px] text-red-600 font-bold uppercase tracking-widest mb-1 shadow-sm">
+                                [ LOG DE AÇÕES — RODADA ATUAL ]
+                            </span>
+                            {Object.values(ship.combat.actionsThisRound || {}).length === 0 ? (
+                                <span className="text-[10px] text-red-700/50 uppercase tracking-widest font-mono">
+                                    Aguardando submissões da tripulação...
+                                </span>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {Object.values(ship.combat.actionsThisRound).map(action => {
+                                        const resColor = action.result === 'success' || action.result === 'critical_success' 
+                                            ? 'text-emerald-400 border-emerald-900/50 bg-emerald-950/20' 
+                                            : action.result === 'failure' || action.result === 'critical_failure'
+                                            ? 'text-red-500 border-red-900/50 bg-red-950/20' 
+                                            : 'text-amber-400 border-amber-900/50 bg-amber-950/20';
+
+                                        const roleMap: Record<string, string> = {
+                                            pilot: 'PIL', gunner: 'ART', engineer: 'ENG', science: 'CIE'
+                                        };
+
+                                        return (
+                                            <div key={action.stationRole} className={`flex flex-col p-1.5 border ${resColor} text-[9px] font-mono tracking-widest`}>
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <span className="font-bold opacity-80 uppercase">[{roleMap[action.stationRole]}] {action.playerName}</span>
+                                                    <span className="text-[8px] opacity-60">🎲 {action.roll} vs {action.targetValue}</span>
+                                                </div>
+                                                <span className="truncate uppercase opacity-90">{action.description || action.result}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-0">
                 {/* ---------- LEFT: WIREFRAME HULL SCHEMATIC ---------- */}

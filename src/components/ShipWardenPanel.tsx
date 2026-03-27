@@ -163,9 +163,41 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
 
             {/* COMBAT CONTROLS */}
             <div className="border border-red-900/30 bg-red-950/10 p-4 flex flex-col gap-3">
-                <h3 className="text-sm font-bold tracking-widest text-red-500 uppercase flex items-center gap-2">
-                    <Crosshair size={16} /> CONTROLE DE COMBATE ESPACIAL
-                </h3>
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold tracking-widest text-red-500 uppercase flex items-center gap-2">
+                        <Crosshair size={16} /> CONTROLE DE COMBATE ESPACIAL
+                    </h3>
+                    {ship.combat?.isActive && (
+                        <span className="text-xs font-bold font-mono text-red-400 bg-red-950/50 px-3 py-1 border border-red-900/50">
+                            RODADA {ship.combat.round} — FASE: {ship.combat.phase.toUpperCase()}
+                        </span>
+                    )}
+                </div>
+
+                {/* Submits from Crew */}
+                {ship.combat?.isActive && (
+                    <div className="mt-2 mb-2 p-3 bg-zinc-950/50 border border-red-900/30 font-mono text-xs">
+                        <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest mb-2 block">
+                            AÇÕES DA TRIPULAÇÃO (AGUARDANDO RESOLUÇÃO)
+                        </span>
+                        {Object.keys(ship.combat.actionsThisRound || {}).length === 0 ? (
+                            <span className="text-zinc-600 opacity-60">Nenhuma ação submetida ainda.</span>
+                        ) : (
+                            <div className="flex flex-col gap-1.5">
+                                {Object.values(ship.combat.actionsThisRound).map(action => (
+                                    <div key={action.stationRole} className="flex items-center gap-3">
+                                        <span className="text-red-400 font-bold w-6">[{action.stationRole.substring(0,3).toUpperCase()}]</span>
+                                        <span className="text-zinc-300 w-24 truncate">{action.playerName}</span>
+                                        <span className="text-emerald-500 font-bold w-12 text-center">{action.roll}</span>
+                                        <span className="text-zinc-500 w-8 text-center text-[10px]">vs {action.targetValue}</span>
+                                        <span className="text-zinc-400 flex-1 truncate">{action.description || action.result}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                     {!ship.combat?.isActive ? (
                         <button onClick={() => startShipCombat(roomId)} disabled={!ship.enemies || Object.keys(ship.enemies).length === 0}

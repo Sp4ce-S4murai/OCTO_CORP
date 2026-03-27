@@ -461,6 +461,21 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                     </button>
                 </div>
 
+            {/* COMBAT PHASE BANNER for STATIONS */}
+            {isCombatActive && (
+                <div className={`mb-4 px-3 py-2 border flex items-center gap-3 ${isStationsPhase ? 'border-amber-900/50 bg-amber-950/20 text-amber-500' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500 opacity-60'}`}>
+                    {isStationsPhase ? <Zap size={14} className="animate-pulse" /> : <Eye size={14} />}
+                    <span className="text-[10px] font-bold tracking-widest uppercase">
+                        {isStationsPhase 
+                            ? `RODADA ${ship.combat?.round} — FASE DE ESTAÇÕES` 
+                            : `RODADA ${ship.combat?.round} — AGUARDANDO RESOLUÇÃO`}
+                    </span>
+                    {!isStationsPhase && (
+                        <span className="ml-auto text-[8px] font-mono opacity-70">AÇÕES BLOQUEADAS: RESOLUÇÃO/DANO EM ANDAMENTO</span>
+                    )}
+                </div>
+            )}
+
             {/* Crew at station */}
             {crewAtMyStation > 1 && (
                 <div className="flex items-center gap-2 mb-4 bg-zinc-950/50 border border-zinc-900 px-3 py-2">
@@ -480,11 +495,23 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
 
             {/* Manual d100 input */}
             {isCombatActive && isStationsPhase && !alreadyActed && (
-                <div className="flex items-center gap-2 mb-3">
-                    <label className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">D100 MANUAL:</label>
-                    <input type="number" min="0" max="99" placeholder="RNG" value={rollInput} onChange={e => setRollInput(e.target.value)}
-                        className="bg-zinc-950 border border-zinc-700 text-zinc-300 p-1 text-xs outline-none w-16 text-center" />
-                    <span className="text-[9px] text-zinc-600">(vazio = virtual)</span>
+                <div className="flex flex-col gap-2 mb-4 p-3 border border-zinc-800 bg-zinc-950/80">
+                    <div className="text-[10px] text-zinc-400 tracking-widest uppercase mb-1 border-b border-zinc-900 pb-1">
+                        🎲 1. OBTENHA SEU RESULTADO NO d100 FÍSICO (OU DEIXE EM BRANCO PARA VIRTUAL)
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <label className="text-[10px] text-emerald-500 uppercase font-bold tracking-widest">
+                            {stationRole === 'pilot' ? `SUA META: ≤ ${pilotTarget}` :
+                             stationRole === 'gunner' ? `SUA META: ≤ ${gunnerTarget}` :
+                             stationRole === 'engineer' ? `SUA META: ≤ ${engineerTarget}` : 
+                             `SUA META: ≤ ${scienceTarget}`}
+                        </label>
+                        <div className="flex items-center gap-2 ml-auto">
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest">D100 ROLADO:</span>
+                            <input type="number" min="0" max="99" placeholder="RNG" value={rollInput} onChange={e => setRollInput(e.target.value)}
+                                className="bg-zinc-900 border border-emerald-900/50 text-emerald-300 p-1.5 text-xs font-bold outline-none w-16 text-center shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]" />
+                        </div>
+                    </div>
                 </div>
             )}
 
