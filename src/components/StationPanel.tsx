@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ShipState, ShipAction, StationRole, StationOccupant } from "@/types/ship";
-import { occupyStation, leaveStation, submitShipAction, rollDice, applyEnemyDamage, drainResource, repairSystem, revealEnemy } from "@/lib/shipDatabase";
+import { occupyStation, leaveStation, submitShipAction, rollDice, applyEnemyDamage, drainResource, repairSystem, revealEnemy, pushShipAlert } from "@/lib/shipDatabase";
 import { pushLog } from "@/lib/database";
 import { CharacterSheet } from "@/types/character";
 import { Crosshair, Navigation, Wrench, Eye, Shield, Zap, Radio, X, ChevronRight, Users } from "lucide-react";
@@ -283,6 +283,12 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         return { roll, isHit, isCritical: isDouble, isAutoFail };
     };
 
+    const notifyCritical = async (roll: number, actionName: string, isHit: boolean) => {
+        const type = isHit ? 'SUCESSO CRÍTICO' : 'FALHA CRÍTICA';
+        const msg = `⚠️ [${type}] ROLAGEM ${roll} EM ${actionName} POR ${character.name.toUpperCase()}! DIRETOR, DETERMINE A CONSEQUÊNCIA NARRATIVA.`;
+        await pushShipAlert(roomId, isHit ? 'warning' : 'critical', msg);
+    };
+
     const handleConfirmStation = async (stationKey: string) => {
         await occupyStation(roomId, stationKey, playerId, character.name);
         setPreviewStation(null);
@@ -302,6 +308,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         await submitShipAction(roomId, myStationKey!, 'pilot', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `EVASÃO (alvo: ≤${target})`, statValue: target, roll, result: isHit ? 'Ship Evade' : 'Ship Damage' });
         if (isHit) drainResource(roomId, 'fuel', 5);
+        if (isCritical) await notifyCritical(roll, 'EVASÃO', isHit);
     };
 
     // --- GUNNER ---
@@ -323,6 +330,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         const action: ShipAction = { type: 'fire', stationRole: 'gunner', playerId, playerName: character.name, weaponId: selectedWeaponId, targetEnemyId: activeEnemy?.id, damageRolled: damage, roll, targetValue: target, result, description: isHit ? `${weapon.name}: ${damage} de dano em ${activeEnemy?.name}` : `${weapon.name}: Errou ${activeEnemy?.name}` };
         await submitShipAction(roomId, myStationKey!, 'gunner', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `DISPARO ${weapon.name.toUpperCase()} (alvo: ≤${target})`, statValue: damage, roll, result: isHit ? 'Ship Fire' : 'Ship Damage' });
+        if (isCritical) await notifyCritical(roll, `DISPARO (${weapon.name.toUpperCase()})`, isHit);
     };
 
     // --- ENGINEER ---
@@ -335,19 +343,21 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         const action: ShipAction = { type: 'repair', stationRole: 'engineer', playerId, playerName: character.name, targetSystem: systemKey, roll, targetValue: target, result: isHit ? (isCritical ? 'critical_success' : 'success') : (isCritical ? 'critical_failure' : 'failure'), description: isHit ? `Reparo: +${repairAmount}% integridade` : 'Reparo falhou' };
         await submitShipAction(roomId, myStationKey!, 'engineer', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `REPARO ${systemKey.toUpperCase()} (alvo: ≤${target})`, statValue: repairAmount, roll, result: isHit ? 'Ship Repair' : 'Ship Damage' });
+        if (isCritical) await notifyCritical(roll, `REPARO (${SYSTEM_LABELS[systemKey]?.toUpperCase() || systemKey})`, isHit);
     };
 
     // --- SCIENCE ---
     const handleScan = async () => {
         const autoScan = crewAtMyStation >= 2 && ship.stats.sensors > 40;
         const target = scienceTarget;
-        const { roll, isHit } = autoScan ? { roll: 1, isHit: true } : doRoll(target);
+        const { roll, isHit, isCritical } = autoScan ? { roll: 1, isHit: true, isCritical: false } : doRoll(target);
         if (isHit && activeEnemy) {
             await revealEnemy(roomId, activeEnemy.id);
         }
         const action: ShipAction = { type: 'scan', stationRole: 'science', playerId, playerName: character.name, targetEnemyId: activeEnemy?.id, roll, targetValue: target, result: isHit ? 'success' : 'failure', description: isHit ? `Scan: ${activeEnemy?.name} revelado` : 'Interferência — scan falhou' };
         await submitShipAction(roomId, myStationKey!, 'science', action, playerId);
         await pushLog(roomId, { timestamp: Date.now(), playerName: character.name, playerId, statName: `SCAN${autoScan ? ' AUTOMÁTICO' : ''} (alvo: ≤${target})`, statValue: target, roll, result: isHit ? 'Ship Scan' : 'Ship Damage' });
+        if (isCritical) await notifyCritical(roll, 'VARREDURA DE SENSORES', isHit);
     };
 
     const SYSTEM_LABELS: Record<string, string> = { propulsion: 'Propulsão', lifeSupport: 'Suporte de Vida', weapons: 'Armamento', sensors: 'Sensores' };
