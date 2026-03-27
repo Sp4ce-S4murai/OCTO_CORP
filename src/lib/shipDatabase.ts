@@ -410,7 +410,7 @@ export const applyEnemyDamage = async (roomId: string, enemyId: string, damage: 
     const enemy = snapshot.val() as EnemyShip | null;
     if (!enemy) return;
 
-    const effectiveDamage = Math.max(0, damage - Math.floor(enemy.stats.armor / 10));
+    const effectiveDamage = Math.max(0, damage);
     const newHp = Math.max(0, enemy.hp.current - effectiveDamage);
 
     await update(enemyRef, { 'hp/current': newHp });

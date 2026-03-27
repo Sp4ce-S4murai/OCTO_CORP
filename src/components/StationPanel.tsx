@@ -380,23 +380,28 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                             {Object.entries(STATION_META).map(([key, meta]) => {
                                 const station = (ship.stations || {})[key];
                                 const occupants = station?.occupants ? Object.values(station.occupants) : [];
-                                const baseColor = meta.color.replace('text-', '').replace('-400', ''); // extracts 'blue', 'red', etc
-                                const hoverBorder = meta.borderColor.replace('800', '600');
-                                const cornerClass = meta.borderColor.replace('800', '500');
                                 
+                                // Explicit class strings so Tailwind JIT parser sees them
+                                const cMap = {
+                                    bridge: { border: 'border-blue-800/80', text: 'text-blue-400', bgHover: 'hover:bg-blue-950/30', borderHover: 'hover:border-blue-600', corner: 'border-blue-500' },
+                                    tactical: { border: 'border-red-800/80', text: 'text-red-400', bgHover: 'hover:bg-red-950/30', borderHover: 'hover:border-red-600', corner: 'border-red-500' },
+                                    engineering: { border: 'border-amber-800/80', text: 'text-amber-400', bgHover: 'hover:bg-amber-950/30', borderHover: 'hover:border-amber-600', corner: 'border-amber-500' },
+                                    science: { border: 'border-purple-800/80', text: 'text-purple-400', bgHover: 'hover:bg-purple-950/30', borderHover: 'hover:border-purple-600', corner: 'border-purple-500' }
+                                }[key as keyof typeof STATION_META] || { border: 'border-zinc-800/80', text: 'text-zinc-400', bgHover: 'hover:bg-zinc-950/30', borderHover: 'hover:border-zinc-600', corner: 'border-zinc-500' };
+
                                 const crewBonus = occupants.length >= 2 ? meta.crewBonuses.find(b => b.count <= occupants.length + 1)?.label : null;
                                 return (
                                     <button
                                         key={key}
                                         onClick={() => setPreviewStation(key)}
-                                        className={`relative flex flex-col px-4 py-3 border transition-colors cursor-pointer ${meta.borderColor}/80 ${meta.color} bg-zinc-950/80 group hover:${meta.bgColor.replace('20', '30')} hover:${hoverBorder}`}
+                                        className={`relative flex flex-col px-4 py-3 border transition-colors cursor-pointer ${cMap.border} ${cMap.text} bg-zinc-950/80 group ${cMap.bgHover} ${cMap.borderHover}`}
                                     >
                                         <div className="flex justify-between items-start w-full mb-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="opacity-80 group-hover:animate-pulse">{meta.icon}</span>
                                                 <span className="text-[11px] font-bold tracking-[0.2em] uppercase">{meta.label}</span>
                                             </div>
-                                            <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] opacity-50 bg-current group-hover:opacity-100 transition-opacity`} />
+                                            <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor] opacity-50 bg-current group-hover:opacity-100 transition-opacity" />
                                         </div>
 
                                         <div className="w-full text-left border-t border-zinc-900/80 pt-2 flex flex-col gap-2">
@@ -418,8 +423,8 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
                                         </div>
                                         
                                         {/* Corners */}
-                                        <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${cornerClass} -translate-x-[1px] -translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
-                                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${cornerClass} translate-x-[1px] translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
+                                        <div className={`absolute top-0 left-0 w-2 h-2 border-t border-l ${cMap.corner} -translate-x-[1px] -translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
+                                        <div className={`absolute bottom-0 right-0 w-2 h-2 border-b border-r ${cMap.corner} translate-x-[1px] translate-y-[1px] opacity-30 group-hover:opacity-100 transition-opacity`} />
                                     </button>
                                 );
                             })}

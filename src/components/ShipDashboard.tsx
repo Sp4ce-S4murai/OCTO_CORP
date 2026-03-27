@@ -26,11 +26,12 @@ const STATION_SEGMENTS: Record<string, {
     label: string;
     system: string;
     icon: React.ReactNode;
+    colorBase: 'blue' | 'red' | 'amber' | 'purple';
 }> = {
-    bridge:      { label: 'COMANDO',    system: 'sensors',     icon: <Navigation size={14} /> },
-    tactical:    { label: 'TÁTICO',     system: 'weapons',     icon: <Target size={14} /> },
-    science:     { label: 'CIÊNCIA',    system: 'lifeSupport', icon: <Eye size={14} /> },
-    engineering: { label: 'ENGENHARIA', system: 'propulsion',  icon: <Wrench size={14} /> },
+    bridge:      { label: 'COMANDO',    system: 'sensors',     icon: <Navigation size={14} />, colorBase: 'blue' },
+    tactical:    { label: 'TÁTICO',     system: 'weapons',     icon: <Target size={14} />, colorBase: 'red' },
+    science:     { label: 'CIÊNCIA',    system: 'lifeSupport', icon: <Eye size={14} />, colorBase: 'purple' },
+    engineering: { label: 'ENGENHARIA', system: 'propulsion',  icon: <Wrench size={14} />, colorBase: 'amber' },
 };
 
 function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; seg: typeof STATION_SEGMENTS[string]; ship: ShipState; className?: string }) {
@@ -42,9 +43,18 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
     const isOffline = sysState?.status === 'offline';
     const isDamaged = sysState?.status === 'damaged';
 
-    const statusBorder = isOffline ? 'border-red-800/80' : isDamaged ? 'border-amber-800/80' : 'border-emerald-800/60';
-    const statusBg = isOffline ? 'bg-red-950/30' : isDamaged ? 'bg-amber-950/20' : 'bg-emerald-950/10';
-    const textTheme = isOffline ? 'text-red-500' : isDamaged ? 'text-amber-500' : 'text-emerald-400';
+    const baseColors = {
+        blue: { border: 'border-blue-800/80', bg: 'bg-blue-950/10', text: 'text-blue-400', emptyBase: 'bg-blue-900 border-blue-700', active: 'bg-blue-600/50 border-blue-500', wait: 'bg-blue-400 border-blue-300 animate-pulse', actedText: 'text-blue-700', rdyBg: 'bg-blue-950/30' },
+        red: { border: 'border-red-800/80', bg: 'bg-red-950/10', text: 'text-red-400', emptyBase: 'bg-red-900 border-red-700', active: 'bg-red-600/50 border-red-500', wait: 'bg-red-400 border-red-300 animate-pulse', actedText: 'text-red-700', rdyBg: 'bg-red-950/30' },
+        amber: { border: 'border-amber-800/80', bg: 'bg-amber-950/10', text: 'text-amber-400', emptyBase: 'bg-amber-900 border-amber-700', active: 'bg-amber-600/50 border-amber-500', wait: 'bg-amber-400 border-amber-300 animate-pulse', actedText: 'text-amber-700', rdyBg: 'bg-amber-950/30' },
+        purple: { border: 'border-purple-800/80', bg: 'bg-purple-950/10', text: 'text-purple-400', emptyBase: 'bg-purple-900 border-purple-700', active: 'bg-purple-600/50 border-purple-500', wait: 'bg-purple-400 border-purple-300 animate-pulse', actedText: 'text-purple-700', rdyBg: 'bg-purple-950/30' },
+    };
+
+    const scheme = baseColors[seg.colorBase];
+
+    const statusBorder = isOffline ? 'border-red-800/80' : isDamaged ? 'border-amber-800/80' : scheme.border;
+    const statusBg = isOffline ? 'bg-red-950/30' : isDamaged ? 'bg-amber-950/20' : scheme.bg;
+    const textTheme = isOffline ? 'text-red-500' : isDamaged ? 'text-amber-500' : scheme.text;
 
     return (
         <div className={`relative border ${statusBorder} ${statusBg} p-3 flex flex-col min-h-[110px] backdrop-blur-sm ${className}`}>
@@ -61,10 +71,10 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
                 </div>
                 {!isOffline && (
                     <div className="flex flex-col items-end">
-                        <span className={`text-[10px] font-bold font-mono ${isDamaged ? 'text-amber-500 animate-pulse' : 'text-emerald-500'}`}>
+                        <span className={`text-[10px] font-bold font-mono ${isDamaged ? 'text-amber-500 animate-pulse' : scheme.text}`}>
                             {sysState?.integrity}%
                         </span>
-                        <span className="text-[6px] text-emerald-700 tracking-widest">PWR_ROUTE</span>
+                        <span className="text-[6px] opacity-60 tracking-widest">PWR_ROUTE</span>
                     </div>
                 )}
             </div>
@@ -72,26 +82,26 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
             <div className="flex flex-col gap-1.5 z-10 flex-1">
                 {occupants.length === 0 ? (
                     <div className="flex items-center gap-2 opacity-40">
-                        <div className="w-1.5 h-1.5 bg-emerald-900 border border-emerald-700" />
-                        <span className="text-[9px] text-emerald-600 uppercase tracking-[0.3em] font-mono">[/ VAGO /]</span>
+                        <div className={`w-1.5 h-1.5 ${scheme.emptyBase} border`} />
+                        <span className={`text-[9px] uppercase tracking-[0.3em] font-mono ${textTheme}`}>[/ VAGO /]</span>
                     </div>
                 ) : (
                     occupants.map(occ => (
-                        <div key={occ.playerId} className="flex items-center justify-between border-l-2 pl-2 py-0.5 border-emerald-900/50">
+                        <div key={occ.playerId} className={`flex items-center justify-between border-l-2 pl-2 py-0.5 ${scheme.border} border-opacity-50`}>
                             <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-1.5 border ${occ.hasActed ? 'bg-emerald-600/50 border-emerald-500' : 'bg-emerald-400 border-emerald-300 animate-pulse'}`} />
-                                <span className={`text-[10px] uppercase font-bold font-mono tracking-widest ${occ.hasActed ? 'text-emerald-700' : 'text-emerald-300'}`}>
+                                <div className={`w-1.5 h-1.5 border ${occ.hasActed ? scheme.active : scheme.wait}`} />
+                                <span className={`text-[10px] uppercase font-bold font-mono tracking-widest ${occ.hasActed ? scheme.actedText : scheme.text}`}>
                                     {occ.playerName}
                                 </span>
                             </div>
-                            {occ.hasActed && <span className="text-[8px] text-emerald-800 font-mono tracking-widest bg-emerald-950/30 px-1 py-0.5">RDY</span>}
+                            {occ.hasActed && <span className={`text-[8px] font-mono tracking-widest ${scheme.rdyBg} px-1 py-0.5 ${scheme.actedText}`}>RDY</span>}
                         </div>
                     ))
                 )}
             </div>
 
             {crewBonus && !isOffline && (
-                <div className="mt-2 text-[8px] tracking-[0.3em] font-mono text-emerald-500 bg-emerald-950/50 border border-emerald-900/50 px-2 py-1 uppercase text-center w-full">
+                <div className={`mt-2 text-[8px] tracking-[0.3em] font-mono ${scheme.text} ${scheme.rdyBg} border ${scheme.border} px-2 py-1 uppercase text-center w-full`}>
                     {crewBonus}
                 </div>
             )}
