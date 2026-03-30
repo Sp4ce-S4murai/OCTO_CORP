@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog } from "@/lib/database";
 import { CharacterSheet, EncounterState } from "@/types/character";
 import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X } from "lucide-react";
+import Link from "next/link";
+
 import { DiceCalculator } from "./DiceCalculator";
 import { TerminalLog } from "./TerminalLog";
 import { ClassSelector } from "./ClassSelector";
@@ -586,6 +588,13 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             )}
 
             <main className={`flex-1 w-full min-w-0 border-2 ${activeBorderTheme} p-6 rounded-sm shadow-2xl relative overflow-hidden transition-all duration-500`}>
+                {/* TACTICAL MAP BUTTON */}
+                <div className="flex justify-end mb-4">
+                    <Link href={`/sala/${roomId}/jogador/${playerId}/tatico`} className="flex items-center gap-2 px-4 py-2 border font-bold uppercase tracking-widest transition-colors bg-blue-950/30 border-blue-900 text-blue-500 hover:bg-blue-900 hover:text-blue-300">
+                        <Swords size={18} /> MAPA TÁTICO
+                    </Link>
+                </div>
+
 
                 {/* PANIC MODAL: INPUT D20 */}
                 {!isDead && showPanicModal && (
