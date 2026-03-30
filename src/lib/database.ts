@@ -1,6 +1,8 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
 import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState } from "../types/character";
+import { CombatState, Token } from "../types/combat";
+
 
 // Helper to get relative path for a room
 const roomPath = (roomId: string) => `rooms/${roomId}`;
@@ -327,4 +329,56 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
             trained: {}, expert: {}, master: {}
         }
     };
+};
+
+// --- TACTICAL COMBAT SYSTEM ---
+
+const combatPath = (roomId: string) => `rooms/${roomId}/combat`;
+
+export const subscribeToCombat = (
+    roomId: string,
+    callback: (data: CombatState | null) => void
+) => {
+    const cPath = ref(database, combatPath(roomId));
+    return onValue(cPath, (snapshot) => {
+        callback(snapshot.val());
+    });
+};
+
+export const startTacticalCombat = async (roomId: string) => {
+    const cPath = ref(database, combatPath(roomId));
+    const initialState: CombatState = {
+        isActive: true,
+        round: 1,
+        currentTurnIndex: 0,
+        initiativeOrder: [],
+        tokens: {},
+        gridSize: 50
+    };
+    await set(cPath, initialState);
+};
+
+export const updateCombatState = async (roomId: string, data: Partial<CombatState>) => {
+    const cPath = ref(database, combatPath(roomId));
+    await update(cPath, data);
+};
+
+export const spawnToken = async (roomId: string, token: Token) => {
+    const tPath = ref(database, `${combatPath(roomId)}/tokens/${token.id}`);
+    await set(tPath, token);
+};
+
+export const updateToken = async (roomId: string, tokenId: string, data: Partial<Token>) => {
+    const tPath = ref(database, `${combatPath(roomId)}/tokens/${tokenId}`);
+    await update(tPath, data);
+};
+
+export const removeToken = async (roomId: string, tokenId: string) => {
+    const tPath = ref(database, `${combatPath(roomId)}/tokens/${tokenId}`);
+    await remove(tPath);
+};
+
+export const endTacticalCombat = async (roomId: string) => {
+    const cPath = ref(database, combatPath(roomId));
+    await remove(cPath);
 };

@@ -129,13 +129,17 @@ function BlueprintRoom({ segKey, seg, ship, className = "" }: { segKey: string; 
 export function ShipDashboard({ ship }: ShipDashboardProps) {
     const hpPercent = ship.hp.max > 0 ? (ship.hp.current / ship.hp.max) * 100 : 0;
     const [flashDamage, setFlashDamage] = useState(false);
+    const [screenShake, setScreenShake] = useState(false);
     const [prevHp, setPrevHp] = useState(ship.hp.current);
 
     useEffect(() => {
         if (ship.hp.current < prevHp) {
             setFlashDamage(true);
+            setScreenShake(true);
             const timer = setTimeout(() => setFlashDamage(false), 900);
-            return () => clearTimeout(timer);
+            const shakeTimer = setTimeout(() => setScreenShake(false), 600);
+            setPrevHp(ship.hp.current);
+            return () => { clearTimeout(timer); clearTimeout(shakeTimer); };
         }
         setPrevHp(ship.hp.current);
     }, [ship.hp.current]);
@@ -147,7 +151,7 @@ export function ShipDashboard({ ship }: ShipDashboardProps) {
         : [];
 
     return (
-        <section className={`border border-zinc-800 bg-[#0a0f0d] transition-all duration-300 relative overflow-hidden font-mono ${flashDamage ? 'ring-2 ring-red-500/50' : ''}`}>
+        <section className={`border border-zinc-800 bg-[#0a0f0d] transition-all duration-300 relative overflow-hidden font-mono ${flashDamage ? 'ring-2 ring-red-500/50' : ''} ${screenShake ? 'animate-[ship-shake_0.5s_ease-out]' : ''}`}>
             {flashDamage && <div className="absolute inset-0 bg-red-900/20 pointer-events-none z-10 animate-pulse" />}
 
             {/* HEADER BAR */}

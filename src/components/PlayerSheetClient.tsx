@@ -55,12 +55,15 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [manualPanicInput, setManualPanicInput] = useState("");
     const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
+    const [wardenToast, setWardenToast] = useState<{ text: string, id: number } | null>(null);
     const [shipData, setShipData] = useState<ShipState | null>(null);
 
     // Track other players in the room
     const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
 
     useEffect(() => {
+        const cleanups: (() => void)[] = [];
+
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
             if (data) {
                 setCharacter(data);
@@ -73,16 +76,20 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             }
             setLoading(false);
         });
+        cleanups.push(unsubscribe);
 
         // Listen for Room Lockdown State & Environment Telemetry
         import("@/lib/firebase").then(({ database }) => {
-            import("firebase/database").then(({ ref, onValue }) => {
-                onValue(ref(database, `rooms/${roomId}/isLocked`), (snap) => {
+            import("firebase/database").then(({ ref, onValue, off }) => {
+                const lockedRef = ref(database, `rooms/${roomId}/isLocked`);
+                const unsub1 = onValue(lockedRef, (snap) => {
                     setIsRoomLocked(snap.val() || false);
                 });
+                cleanups.push(unsub1);
 
                 // Listen for other players
-                onValue(ref(database, `rooms/${roomId}/players`), (snap) => {
+                const playersRef = ref(database, `rooms/${roomId}/players`);
+                const unsub2 = onValue(playersRef, (snap) => {
                     const playersData = snap.val();
                     if (playersData) {
                         const parsedPlayers = Object.keys(playersData)
@@ -102,24 +109,34 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         setActivePlayers([]);
                     }
                 });
+                cleanups.push(unsub2);
 
-                onValue(ref(database, `rooms/${roomId}/environment`), (snap) => {
+                const envRef = ref(database, `rooms/${roomId}/environment`);
+                const unsub3 = onValue(envRef, (snap) => {
                     setEnvironment(snap.val());
                 });
+                cleanups.push(unsub3);
 
-                onValue(ref(database, `rooms/${roomId}/encounter`), (snap) => {
+                const encounterRef = ref(database, `rooms/${roomId}/encounter`);
+                const unsub4 = onValue(encounterRef, (snap) => {
                     setEncounter(snap.val());
                 });
+                cleanups.push(unsub4);
 
-                onValue(ref(database, `rooms/${roomId}/activeImage`), (snap) => {
+                const imageRef = ref(database, `rooms/${roomId}/activeImage`);
+                const unsub5 = onValue(imageRef, (snap) => {
                     setActiveImage(snap.val());
                 });
+                cleanups.push(unsub5);
 
-                onValue(ref(database, `rooms/${roomId}/ship`), (snap) => {
+                const shipRef = ref(database, `rooms/${roomId}/ship`);
+                const unsub6 = onValue(shipRef, (snap) => {
                     setShipData(snap.val());
                 });
+                cleanups.push(unsub6);
 
-                onValue(ref(database, `rooms/${roomId}/activePanicTest`), (snap) => {
+                const panicRef = ref(database, `rooms/${roomId}/activePanicTest`);
+                const unsub7 = onValue(panicRef, (snap) => {
                     const data = snap.val();
                     setActivePanicTest(data);
 
@@ -129,10 +146,13 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         setShowPanicModal(false);
                     }
                 });
+                cleanups.push(unsub7);
             });
         });
 
-        return () => unsubscribe();
+        return () => {
+            cleanups.forEach(fn => fn());
+        };
     }, [roomId, playerId]);
 
     // Listen for Warden Damage and Stress Logs
@@ -158,6 +178,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             // Warden manually triggered a panic test
                             setShowPanicModal(true);
                         }
+                    }
+                    // Broadcast Warden messages as toast to all players
+                    if (log && log.result === 'Warden Message' && log.playerId === 'SYSTEM') {
+                        setWardenToast({ text: log.statName, id: Date.now() });
                     }
                 });
                 cleanup = () => unsubscribe();
@@ -306,6 +330,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     const isVoid = environment?.presetName === 'O Vazio';
     const isDead = character ? character.vitals.wounds.current >= character.vitals.wounds.max : false;
+    const isDying = isDead && character && !character.hasSpokenLastWords;
+    const [lastWordsInput, setLastWordsInput] = useState("");
+    const [deathTimer, setDeathTimer] = useState<number | null>(null);
+
     const [jumpscareImage, setJumpscareImage] = useState<string | null>(null);
     const [voidMessage, setVoidMessage] = useState<{ text: string, x: number, y: number } | null>(null);
 
@@ -347,6 +375,54 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             setVoidMessage(null);
         }
     }, [isVoid, isDead]);
+
+    // Auto-dismiss Warden Toast
+    useEffect(() => {
+        if (wardenToast) {
+            const timer = setTimeout(() => setWardenToast(null), 6000);
+            return () => clearTimeout(timer);
+        }
+    }, [wardenToast?.id]);
+
+    // Death sequence timer
+    useEffect(() => {
+        if (isDying && deathTimer === null) {
+            setDeathTimer(15);
+        }
+    }, [isDying, deathTimer]);
+
+    useEffect(() => {
+        if (deathTimer !== null && deathTimer > 0) {
+            const t = setTimeout(() => setDeathTimer(prev => prev! - 1), 1000);
+            return () => clearTimeout(t);
+        } else if (deathTimer === 0) {
+            submitLastWords();
+        }
+    }, [deathTimer]);
+
+    const submitLastWords = async () => {
+        if (!character) return;
+        const msg = lastWordsInput.trim() || "* ...SINAL DE TELA PLANA ... *";
+        import("@/lib/database").then(async ({ pushLog, updatePlayerNested }) => {
+            try {
+                await pushLog(roomId, {
+                    id: Date.now().toString(),
+                    timestamp: Date.now(),
+                    playerName: character.name,
+                    playerId,
+                    statName: "ÚLTIMAS PALAVRAS",
+                    statValue: 0,
+                    roll: 0,
+                    result: "Last Words",
+                    customMessage: msg
+                });
+                await updatePlayerNested(roomId, character.id, "hasSpokenLastWords", true);
+            } catch (e) {
+                console.error(e);
+            }
+        });
+        setDeathTimer(null);
+    };
 
     if (loading || !character) {
         return <div className="animate-pulse flex p-4 text-emerald-500/50">Carregando Conexão Neural...</div>;
@@ -432,6 +508,23 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col gap-8 relative pb-24">
+
+            {/* WARDEN COMMLINK TOAST */}
+            {wardenToast && (
+                <div
+                    className="fixed top-4 left-1/2 -translate-x-1/2 z-[250] max-w-lg w-full animate-[toast-slide-in_0.4s_ease-out] cursor-pointer"
+                    onClick={() => setWardenToast(null)}
+                >
+                    <div className="bg-cyan-950/95 border-2 border-cyan-500/70 shadow-[0_0_30px_rgba(6,182,212,0.3)] px-6 py-4 backdrop-blur-md flex items-start gap-3">
+                        <div className="text-cyan-400 animate-pulse text-lg shrink-0">📡</div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[10px] text-cyan-600 font-bold uppercase tracking-widest mb-1">COMMLINK // DIRETOR</div>
+                            <div className="text-cyan-200 text-sm font-mono">&quot;{wardenToast.text}&quot;</div>
+                        </div>
+                        <button className="text-cyan-700 hover:text-cyan-400 text-xs shrink-0 mt-1">✕</button>
+                    </div>
+                </div>
+            )}
 
             {/* SHIP DASHBOARD + STATION PANEL (full-width, above main layout) */}
             {shipData && (
@@ -647,7 +740,44 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                     </div>
                 )}
 
-                {isDead && (
+                {/* LAST WORDS / DEATH SEQUENCE OVERLAY */}
+                {deathTimer !== null && (
+                    <div className="absolute inset-0 bg-red-950/95 z-[200] flex flex-col items-center justify-center p-8 backdrop-blur-md border-[10px] border-red-600/50 animate-pulse">
+                        <div className="max-w-xl w-full text-center">
+                            <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-[0.3em] text-red-500 mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,1)]">
+                                COLAPSO MULTISSISTÊMICO
+                            </h2>
+                            <p className="text-red-300 font-mono text-sm mb-8">
+                                DESCONEXÃO NEURAL IMINENTE. CANAL DE EMERGÊNCIA ABERTO. <br/>
+                                <span className="text-xl text-white block mt-4 font-bold border-b border-red-500 pb-2">TEMPO RESTANTE: {deathTimer} s</span>
+                            </p>
+                            
+                            <textarea
+                                autoFocus
+                                value={lastWordsInput}
+                                onChange={e => setLastWordsInput(e.target.value)}
+                                maxLength={120}
+                                placeholder="Suas últimas palavras..."
+                                className="w-full h-32 bg-red-900/20 border border-red-500 text-red-100 p-4 font-mono text-center text-xl outline-none focus:bg-red-900/40 focus:shadow-[0_0_30px_rgba(239,68,68,0.3)] resize-none"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        submitLastWords();
+                                    }
+                                }}
+                            />
+                            
+                            <button
+                                onClick={submitLastWords}
+                                className="mt-6 uppercase font-bold tracking-[0.3em] bg-red-800 hover:bg-red-700 text-white px-8 py-4 w-full shadow-[0_0_20px_rgba(239,68,68,0.5)] transition"
+                            >
+                                TRANSMITIR & MORRER
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {isDead && deathTimer === null && (
                     <div className="absolute inset-0 bg-red-950/40 z-10 pointer-events-none flex items-center justify-center">
                         <div className="text-red-500 font-bold text-6xl md:text-9xl opacity-20 rotate-[-15deg] uppercase tracking-widest border-y-8 border-red-500/20 py-4 mix-blend-overlay">
                             O B I T O
@@ -773,6 +903,42 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 </header>
 
                 <ClassSelector roomId={roomId} character={character} />
+
+                {/* CONDITIONS HUD — Active Consequences */}
+                {character.consequences && character.consequences.length > 0 && (
+                    <div className="mb-6 border border-amber-900/50 bg-amber-950/10 p-4 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl pointer-events-none" />
+                        <h3 className="text-xs font-bold tracking-widest text-amber-500 uppercase mb-3 flex items-center gap-2">
+                            ⚠ CONDIÇÕES ATIVAS ({character.consequences.length})
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                            {character.consequences.map(c => (
+                                <div
+                                    key={c.id}
+                                    className={`flex items-center gap-2 px-3 py-2 border text-xs font-bold uppercase tracking-wider ${
+                                        c.is_fatal
+                                            ? 'bg-red-950/50 border-red-500 text-red-400 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.2)]'
+                                            : c.modifier_type === 'disadvantage'
+                                            ? 'bg-amber-950/30 border-amber-700 text-amber-400'
+                                            : 'bg-zinc-900 border-zinc-700 text-zinc-400'
+                                    }`}
+                                    title={c.ui_description || c.name}
+                                >
+                                    <span className="text-sm">{c.is_fatal ? '💀' : c.modifier_type === 'disadvantage' ? '⬇' : '📉'}</span>
+                                    <div className="flex flex-col">
+                                        <span>{c.name}</span>
+                                        {c.target_stat && c.target_stat !== 'all' && (
+                                            <span className="text-[9px] opacity-60 normal-case">afeta: {c.target_stat}</span>
+                                        )}
+                                        {c.target_stat === 'all' && (
+                                            <span className="text-[9px] opacity-60 normal-case">afeta: todos</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* STATS & SAVES */}
                 <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">

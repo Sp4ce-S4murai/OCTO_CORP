@@ -43,6 +43,7 @@ export function DiceCalculator({ roomId, character }: Props) {
     const [panicMode, setPanicMode] = useState(false);
     const [panicRollStr, setPanicRollStr] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
+    const [rollAnimation, setRollAnimation] = useState<{ rolling: boolean, display: string, resultLabel: string | null, type: 'd100' | 'd20' | null }>({ rolling: false, display: '--', resultLabel: null, type: null });
 
     const classAutoSkills = useMemo(() => {
         switch (character.characterClass) {
@@ -99,6 +100,21 @@ export function DiceCalculator({ roomId, character }: Props) {
             } else {
                 rawRoll = Math.floor(Math.random() * 100);
             }
+            
+            // Play Animation
+            setRollAnimation({ rolling: true, display: '--', resultLabel: null, type: 'd100' });
+            await new Promise(resolve => {
+                let ticks = 0;
+                const interval = setInterval(() => {
+                    ticks++;
+                    setRollAnimation(prev => ({ ...prev, display: Math.floor(Math.random() * 100).toString().padStart(2, '0') }));
+                    if (ticks >= 12) {
+                        clearInterval(interval);
+                        resolve(null);
+                    }
+                }, 100);
+            });
+            
             setRollStr(rawRoll.toString().padStart(2, '0'));
         } else {
             rawRoll = parseInt(rollStr, 10);
@@ -154,17 +170,21 @@ export function DiceCalculator({ roomId, character }: Props) {
             // push to firebase
             await pushLog(roomId, logPayload);
 
+            setRollAnimation({ rolling: false, display: rawRoll.toString().padStart(2, '0'), resultLabel: resolveResult, type: 'd100' });
+
             // Handle Stress and Panic Triggers
             if (resolveResult === 'Failure' || resolveResult === 'Critical Failure') {
                 const currentStress = character.vitals.stress.current || 0;
                 await updatePlayerNested(roomId, character.id, "vitals/stress/current", currentStress + 1);
 
                 if (resolveResult === 'Critical Failure') {
-                    setPanicMode(true);
+                    setTimeout(() => setPanicMode(true), 1500); // Delay panic mode slightly to see the result
                 }
             }
 
             if (!isVirtualRoll) setRollStr("");
+            setTimeout(() => setRollAnimation(prev => prev.type === 'd100' ? { rolling: false, display: '--', resultLabel: null, type: null } : prev), 2000);
+            
         } catch (e) {
             console.error(e);
             alert("Falha na Rede Neural/Firebase: As Regras do Banco de Dados rejeitaram a gravação ou a conexão caiu. Verifique se as Permissões do RTDB estão liberadas como '.write': true no console do Firebase.");
@@ -182,6 +202,21 @@ export function DiceCalculator({ roomId, character }: Props) {
         if (isVirtualRoll) {
             // RNG D20 (1-20)
             rawRoll = Math.floor(Math.random() * 20) + 1;
+            
+            // Play Animation
+            setRollAnimation({ rolling: true, display: '--', resultLabel: null, type: 'd20' });
+            await new Promise(resolve => {
+                let ticks = 0;
+                const interval = setInterval(() => {
+                    ticks++;
+                    setRollAnimation(prev => ({ ...prev, display: (Math.floor(Math.random() * 20) + 1).toString() }));
+                    if (ticks >= 12) {
+                        clearInterval(interval);
+                        resolve(null);
+                    }
+                }, 100);
+            });
+            
             setPanicRollStr(rawRoll.toString());
         } else {
             rawRoll = parseInt(panicRollStr, 10);
@@ -209,20 +244,38 @@ export function DiceCalculator({ roomId, character }: Props) {
                 result: resolveResult,
             });
 
-            setPanicMode(false);
-            setPanicRollStr("");
+            setRollAnimation({ rolling: false, display: rawRoll.toString(), resultLabel: resolveResult, type: 'd20' });
+
+            setTimeout(() => {
+                setPanicMode(false);
+                setPanicRollStr("");
+                setRollAnimation(prev => prev.type === 'd20' ? { rolling: false, display: '--', resultLabel: null, type: null } : prev);
+            }, 2500);
+            
         } catch (e) {
             console.error(e);
             alert("A conexão com a nuvem caiu antes que o log pudesse ser gravado. Cheque as permissões do banco.");
         } finally {
-            setIsProcessing(false);
+            if (!isVirtualRoll) setIsProcessing(false);
+            else setTimeout(() => setIsProcessing(false), 2500); // disable buttons while showing result
         }
     };
 
     if (panicMode) {
         return (
-            <div className="bg-amber-950 border-2 border-amber-600 p-4 shadow-xl shadow-amber-900/50 animate-pulse">
-                <h3 className="text-amber-500 font-bold mb-2 uppercase text-xl border-b border-amber-600 pb-2 flex items-center gap-2">
+            <div className="bg-amber-950 border-2 border-amber-600 p-4 shadow-xl shadow-amber-900/50 animate-pulse relative overflow-hidden">
+                {rollAnimation.type === 'd20' && (
+                    <div className="absolute inset-0 z-50 bg-amber-950/95 backdrop-blur-md flex flex-col items-center justify-center">
+                        <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent animate-pulse" />
+                        <div className={`text-xs font-bold tracking-[0.3em] mb-4 uppercase ${rollAnimation.rolling ? 'text-amber-500/70' : (rollAnimation.resultLabel?.includes('Success') ? 'text-emerald-400' : 'text-red-500')}`}>
+                            {rollAnimation.rolling ? 'ROLANDO PÂNICO (d20)...' : rollAnimation.resultLabel}
+                        </div>
+                        <div className={`text-7xl font-bold font-mono ${rollAnimation.rolling ? 'animate-pulse text-amber-500/50' : (rollAnimation.resultLabel?.includes('Success') ? 'text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]' : 'text-red-500 animate-pulse drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]')}`}>
+                            {rollAnimation.display}
+                        </div>
+                    </div>
+                )}
+                <h3 className="text-amber-500 font-bold mb-2 uppercase text-xl border-b border-amber-600 pb-2 flex items-center gap-2 relative z-10">
                     <PanicIcon size={24} strokeWidth={2.5} /> ALERTA DE PÂNICO DETECTADO
                 </h3>
                 <p className="text-amber-200 text-sm mb-4">
@@ -264,8 +317,20 @@ export function DiceCalculator({ roomId, character }: Props) {
     }
 
     return (
-        <div className="bg-zinc-900 border border-emerald-900 p-4">
-            <h3 className="text-emerald-500 font-bold mb-4 uppercase text-lg border-b border-emerald-900 pb-2 flex justify-between items-center">
+        <div className="bg-zinc-900 border border-emerald-900 p-4 relative overflow-hidden">
+            {rollAnimation.type === 'd100' && (
+                <div className="absolute inset-0 z-50 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center">
+                    <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent animate-pulse" />
+                    <div className={`text-xs font-bold tracking-[0.3em] mb-4 uppercase ${rollAnimation.rolling ? 'text-zinc-500' : (rollAnimation.resultLabel?.includes('Success') ? 'text-emerald-400' : 'text-amber-500')}`}>
+                        {rollAnimation.rolling ? 'ROLANDO D100...' : rollAnimation.resultLabel}
+                    </div>
+                    <div className={`text-7xl font-bold font-mono ${rollAnimation.rolling ? 'animate-[dice-spin_0.2s_linear_infinite] text-zinc-600' : (rollAnimation.resultLabel?.includes('Success') ? 'text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]' : 'text-amber-500 drop-shadow-[0_0_20px_rgba(245,158,11,0.5)]')}`}>
+                        {rollAnimation.display}
+                    </div>
+                </div>
+            )}
+            
+            <h3 className="text-emerald-500 font-bold mb-4 uppercase text-lg border-b border-emerald-900 pb-2 flex justify-between items-center relative z-10">
                 <span>Calculador de Teste</span>
                 <span className="text-xs font-normal text-emerald-700">D100 MÓDULO</span>
             </h3>

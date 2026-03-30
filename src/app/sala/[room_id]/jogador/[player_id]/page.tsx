@@ -1,4 +1,6 @@
 import PlayerSheetClient from "@/components/PlayerSheetClient";
+import CombatHUD from "@/components/TacticalMap/CombatHUD";
+
 
 interface PageProps {
     params: Promise<{
@@ -13,6 +15,8 @@ export default async function PlayerPage({ params }: PageProps) {
     return (
         <div className="min-h-screen bg-zinc-950 text-emerald-500 font-mono p-4 sm:p-6 lg:p-8">
             <PlayerSheetClient roomId={resolvedParams.room_id} playerId={resolvedParams.player_id} />
+            <CombatHUD roomId={resolvedParams.room_id} playerId={resolvedParams.player_id} isWarden={false} />
         </div>
     );
+
 }

@@ -358,6 +358,16 @@ export function ShipWardenPanel({ roomId, ship }: ShipWardenPanelProps) {
                         <button onClick={() => handleDrainResource('oxygen')} className="bg-cyan-900/50 text-[10px] px-3 py-2 text-cyan-200 font-bold uppercase hover:bg-cyan-800 border border-cyan-700">O₂</button>
                         <button onClick={() => handleDrainResource('ammo')} className="bg-red-900/50 text-[10px] px-3 py-2 text-red-200 font-bold uppercase hover:bg-red-800 border border-red-700">MUN</button>
                     </div>
+                    <div className="mt-3 pt-3 border-t border-emerald-900/30">
+                        <h4 className="text-xs font-bold tracking-widest text-emerald-500 uppercase mb-2 flex items-center gap-2">
+                            <Wrench size={14} /> REABASTECER RECURSO
+                        </h4>
+                        <div className="flex gap-2 items-center flex-wrap">
+                            <button onClick={() => { const amt = parseInt(drainAmount); if (!isNaN(amt) && amt > 0) refillResource(roomId, 'fuel', amt); }} className="bg-emerald-950/50 text-[10px] px-3 py-2 text-emerald-300 font-bold uppercase hover:bg-emerald-900 border border-emerald-800">+COMB</button>
+                            <button onClick={() => { const amt = parseInt(drainAmount); if (!isNaN(amt) && amt > 0) refillResource(roomId, 'oxygen', amt); }} className="bg-emerald-950/50 text-[10px] px-3 py-2 text-emerald-300 font-bold uppercase hover:bg-emerald-900 border border-emerald-800">+O₂</button>
+                            <button onClick={() => { const amt = parseInt(drainAmount); if (!isNaN(amt) && amt > 0) refillResource(roomId, 'ammo', amt); }} className="bg-emerald-950/50 text-[10px] px-3 py-2 text-emerald-300 font-bold uppercase hover:bg-emerald-900 border border-emerald-800">+MUN</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

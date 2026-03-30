@@ -41,6 +41,15 @@ export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, 
             case 'Warden Damage': return 'text-red-500 font-bold bg-red-950/80 px-2';
             case 'Warden Stress': return 'text-amber-500 font-bold bg-amber-950/80 px-2';
             case 'Warden Message': return 'text-cyan-400 font-bold';
+            // Ship combat events
+            case 'Ship Fire': return 'text-orange-400 font-bold bg-orange-950/60 px-1';
+            case 'Ship Evade': return 'text-sky-400 font-bold bg-sky-950/60 px-1';
+            case 'Ship Repair': return 'text-amber-300 font-bold bg-amber-950/40 px-1';
+            case 'Ship Scan': return 'text-violet-400 font-bold bg-violet-950/40 px-1';
+            case 'Ship Damage': return 'text-red-400 bg-red-950/40 px-1';
+            case 'Ship Critical': return 'text-red-500 font-bold bg-red-900/50 px-2 animate-pulse';
+            case 'System Failure': return 'text-red-600 font-bold bg-red-950/80 px-2';
+            case 'Tabela de Pânico': return 'text-amber-400 font-bold bg-amber-900/40 px-1';
             default: return 'text-zinc-500';
         }
     };
@@ -57,6 +66,7 @@ export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, 
                     const isPanic = log.result.includes('Panic');
                     const isWarden = log.result.includes('Warden Damage') || log.result.includes('Warden Stress');
                     const isWardenMsg = log.result === 'Warden Message';
+                    const isShipEvent = log.result.startsWith('Ship ') || log.result === 'System Failure' || log.result === 'Tabela de Pânico';
                     const hasMod = !!log.modifier;
 
                     if (isWardenMsg) {
@@ -64,6 +74,62 @@ export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, 
                             <div key={log.id} className="border-l-2 pl-2 py-1 border-cyan-900/50 bg-cyan-950/10 mb-1">
                                 <span className="text-cyan-600/70 text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
                                 <span className="text-cyan-300 italic">&quot;{log.statName}&quot;</span>
+                            </div>
+                        );
+                    }
+
+                    // Last Words rendering
+                    if (log.result === 'Last Words') {
+                        return (
+                            <div key={log.id} className="border-l-4 border-red-600 pl-3 py-3 mb-2 bg-red-950/20 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-2 h-2 text-red-500/20">💀</div>
+                                <span className="text-red-500/70 text-[10px] uppercase font-bold tracking-widest block mb-1">
+                                    [{new Date(log.timestamp).toLocaleTimeString()}] ÓBITO REGISTRADO: {log.playerName}
+                                </span>
+                                <span className="text-zinc-300 font-mono italic">
+                                    "{log.customMessage}"
+                                </span>
+                            </div>
+                        );
+                    }
+
+                    // Ship combat event rendering
+                    if (isShipEvent) {
+                        const shipIcon = (() => {
+                            switch (log.result) {
+                                case 'Ship Fire': return '🔥';
+                                case 'Ship Evade': return '💨';
+                                case 'Ship Scan': return '🔍';
+                                case 'Ship Repair': return '🔧';
+                                case 'Ship Damage': return '💥';
+                                case 'Ship Critical': return '💀';
+                                case 'System Failure': return '⚠️';
+                                case 'Tabela de Pânico': return '🧠';
+                                default: return '🚀';
+                            }
+                        })();
+                        const shipBorder = (() => {
+                            switch (log.result) {
+                                case 'Ship Fire': return 'border-orange-600/50 bg-orange-950/10';
+                                case 'Ship Evade': return 'border-sky-600/50 bg-sky-950/10';
+                                case 'Ship Scan': return 'border-violet-600/50 bg-violet-950/10';
+                                case 'Ship Repair': return 'border-amber-600/50 bg-amber-950/10';
+                                case 'Ship Damage': return 'border-red-900/50 bg-red-950/10';
+                                case 'Ship Critical': return 'border-red-500/80 bg-red-950/20';
+                                case 'System Failure': return 'border-red-700/80 bg-red-950/20';
+                                case 'Tabela de Pânico': return 'border-amber-600/50 bg-amber-950/10';
+                                default: return 'border-zinc-800/50';
+                            }
+                        })();
+                        return (
+                            <div key={log.id} className={`border-l-2 pl-2 py-1 mb-1 ${shipBorder}`}>
+                                <span className="text-emerald-600/70 text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                                <span className="text-[10px]">{shipIcon}</span>{' '}
+                                <span className="text-zinc-400 font-bold">NAVE:</span>{' '}
+                                <span className="text-emerald-400 font-bold">{log.playerName}</span>{' '}
+                                <span className="text-zinc-500">{log.statName}</span>{' '}
+                                {log.roll > 0 && <><span className="text-emerald-700">rolou</span> <span className="font-bold text-zinc-300">{log.roll.toString().padStart(2, '0')}</span>{' '}</>}
+                                {'=> '}<span className={`uppercase ${getResultColor(log.result)}`}>{log.result}</span>
                             </div>
                         );
                     }

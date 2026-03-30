@@ -66,6 +66,7 @@ export interface CharacterSheet {
     vitals: Vitals;
     skills: Skills;
     consequences?: Consequence[]; // Entropy/Panic debuffs
+    hasSpokenLastWords?: boolean; // True if the character already died and sent their final message
 }
 
 export interface EnvironmentState {
@@ -116,5 +117,6 @@ export interface RollLog {
     statValue: number;
     modifier?: { name: string; value: number }; // +10, +15, +20
     roll: number;
-    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Panic' | 'Warden Message' | 'Tabela de Pânico' | 'Ship Fire' | 'Ship Evade' | 'Ship Scan' | 'Ship Repair' | 'Ship Critical' | 'Ship Damage' | 'Hull Breach' | 'System Failure';
+    result: 'Success' | 'Critical Success' | 'Failure' | 'Critical Failure' | 'Panic Fail' | 'Panic Success' | 'Warden Damage' | 'Warden Stress' | 'Warden Panic' | 'Warden Message' | 'Tabela de Pânico' | 'Ship Fire' | 'Ship Evade' | 'Ship Scan' | 'Ship Repair' | 'Ship Critical' | 'Ship Damage' | 'Hull Breach' | 'System Failure' | 'Last Words';
+    customMessage?: string;
 }

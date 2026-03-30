@@ -226,6 +226,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const [selectedWeaponId, setSelectedWeaponId] = useState<string>("");
     const [rollInput, setRollInput] = useState("");
     const [targetEnemyId, setTargetEnemyId] = useState<string>("");
+    const [rollAnimation, setRollAnimation] = useState<{ rolling: boolean, display: string, final: string, success: boolean | null }>({ rolling: false, display: '--', final: '--', success: null });
     const myStationEntry = Object.entries(ship.stations || {}).find(([, s]) => s.occupants && s.occupants[playerId]);
     const myStationKey = myStationEntry?.[0];
     const myStation = myStationEntry?.[1];
@@ -283,6 +284,22 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         return { roll, isHit, isCritical: isDouble, isAutoFail };
     };
 
+    const triggerRollAnimation = (roll: number, isHit: boolean) => {
+        setRollAnimation({ rolling: true, display: '--', final: roll.toString().padStart(2, '0'), success: null });
+        let ticks = 0;
+        const maxTicks = 12;
+        const interval = setInterval(() => {
+            ticks++;
+            const fake = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+            setRollAnimation(prev => ({ ...prev, display: fake }));
+            if (ticks >= maxTicks) {
+                clearInterval(interval);
+                setRollAnimation({ rolling: false, display: roll.toString().padStart(2, '0'), final: roll.toString().padStart(2, '0'), success: isHit });
+                setTimeout(() => setRollAnimation({ rolling: false, display: '--', final: '--', success: null }), 3000);
+            }
+        }, 100);
+    };
+
     const notifyCritical = async (roll: number, actionName: string, isHit: boolean) => {
         const type = isHit ? 'SUCESSO CRÍTICO' : 'FALHA CRÍTICA';
         const msg = `⚠️ [${type}] ROLAGEM ${roll} EM ${actionName} POR ${character.name.toUpperCase()}! DIRETOR, DETERMINE A CONSEQUÊNCIA NARRATIVA.`;
@@ -319,6 +336,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         if (ship.resources.ammo.current < weapon.ammoCost) return;
         const target = gunnerTarget;
         const { roll, isHit, isCritical } = doRoll(target);
+        triggerRollAnimation(roll, isHit);
         const result = isHit ? (isCritical ? 'critical_success' : 'success') : (isCritical ? 'critical_failure' : 'failure');
         let damage = 0;
         if (isHit) {
@@ -337,6 +355,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
     const handleRepair = async (systemKey: string) => {
         const target = engineerTarget;
         const { roll, isHit, isCritical } = doRoll(target);
+        triggerRollAnimation(roll, isHit);
         const baseRepair = crewAtMyStation >= 2 ? 40 : 20;
         const repairAmount = isHit ? (isCritical ? baseRepair * 2 : baseRepair) : 0;
         if (isHit) await repairSystem(roomId, systemKey, repairAmount);
@@ -351,6 +370,7 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
         const autoScan = crewAtMyStation >= 2 && ship.stats.sensors > 40;
         const target = scienceTarget;
         const { roll, isHit, isCritical } = autoScan ? { roll: 1, isHit: true, isCritical: false } : doRoll(target);
+        if (!autoScan) triggerRollAnimation(roll, isHit);
         if (isHit && activeEnemy) {
             await revealEnemy(roomId, activeEnemy.id);
         }
@@ -458,6 +478,20 @@ export function StationPanel({ roomId, ship, playerId, character }: StationPanel
             {/* Scanlines */}
             <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_50%,rgba(0,255,100,0.02)_50%)] bg-[length:100%_4px] pointer-events-none z-0" />
             
+            {/* ROLL ANIMATION OVERLAY */}
+            {rollAnimation.display !== '--' && (
+                <div className="absolute inset-0 z-50 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center">
+                    <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent animate-pulse" />
+                    <div className={`text-xs font-bold tracking-[0.3em] mb-6 uppercase ${rollAnimation.rolling ? 'text-zinc-500' : (rollAnimation.success ? 'text-emerald-400' : 'text-red-500')}`}>
+                        {rollAnimation.rolling ? 'CALCULANDO TELEMETRIA...' : 
+                         rollAnimation.success ? 'PARÂMETROS ACEITOS' : 'FALHA DE EXECUÇÃO'}
+                    </div>
+                    <div className={`text-7xl font-bold ${rollAnimation.rolling ? 'animate-pulse text-zinc-300' : (rollAnimation.success ? 'text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]' : 'text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]')}`}>
+                        {rollAnimation.display}
+                    </div>
+                </div>
+            )}
+
             <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4 border-b border-zinc-900 pb-3">
                     <div className="flex flex-col">
