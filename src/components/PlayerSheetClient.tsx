@@ -408,7 +408,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         import("@/lib/database").then(async ({ pushLog, updatePlayerNested }) => {
             try {
                 await pushLog(roomId, {
-                    id: Date.now().toString(),
                     timestamp: Date.now(),
                     playerName: character.name,
                     playerId,

@@ -33,7 +33,7 @@ export default function CombatHUD({ roomId, playerId, isWarden }: CombatHUDProps
 
     const handleSpawnEnemy = () => {
         if (!combatState) return;
-        const tokenId = `enemy_${crypto.randomUUID().split('-')[0]}`;
+        const tokenId = `enemy_${Math.random().toString(36).substring(2, 9)}`;
         const yOffset = Object.keys(combatState.tokens || {}).length;
         const enemy: Token = {
             id: tokenId,
@@ -53,7 +53,7 @@ export default function CombatHUD({ roomId, playerId, isWarden }: CombatHUDProps
         if (!combatState) return;
         
         // Spawn a generic player token or specific player if requested
-        const tId = playerId && !isWarden ? playerId : `player_${crypto.randomUUID().split('-')[0]}`;
+        const tId = playerId && !isWarden ? playerId : `player_${Math.random().toString(36).substring(2, 9)}`;
         const name = playerId && !isWarden ? "YOU" : `PC-${tId.substring(0, 3).toUpperCase()}`;
         const yOffset = Object.keys(combatState.tokens || {}).length;
         const playerToken: Token = {
