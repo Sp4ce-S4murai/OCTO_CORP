@@ -3,73 +3,83 @@
 import { useState } from "react";
 import { addGlobalItem, deleteGlobalItem } from "@/lib/database";
 import { Item, Weapon, ItemType } from "@/types/character";
-import { Package, Plus, Trash2, Edit2, Save, X } from "lucide-react";
+import { Package, Plus, Trash2, Edit2 } from "lucide-react";
 
 interface Props {
     roomId: string;
     globalInventory: Record<string, Item | Weapon> | undefined;
 }
 
+// Dedicated form interface that accepts any ItemType (avoids Weapon's literal 'weapon' constraint)
+interface ItemFormData {
+    id: string;
+    name: string;
+    description: string;
+    type: ItemType;
+    weight: number;
+    quantity: number;
+    damage?: string;
+    range?: number;
+    baseStat?: 'combat' | 'strength' | 'speed';
+    bonus?: number;
+}
+
+const EMPTY_FORM: ItemFormData = {
+    id: "",
+    name: "",
+    description: "",
+    type: "gear",
+    weight: 1,
+    quantity: 1,
+    damage: "",
+    range: 1,
+    baseStat: "combat",
+    bonus: 0
+};
+
 export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-
-    const [formData, setFormData] = useState<Partial<Weapon & Item> & { type: ItemType }>({
-        id: "",
-        name: "",
-        description: "",
-        type: "gear",
-        weight: 1,
-        quantity: 1,
-        damage: "",
-        range: 1,
-        baseStat: "combat",
-        bonus: 0
-    });
+    const [formData, setFormData] = useState<ItemFormData>(EMPTY_FORM);
 
     const itemsList = Object.values(globalInventory || {});
 
     const handleEdit = (item: Item | Weapon) => {
         setEditingId(item.id);
-        setFormData(item as any);
+        setFormData(item as unknown as ItemFormData);
         setIsOpen(true);
     };
 
     const handleNew = () => {
         setEditingId(null);
-        setFormData({
-            id: `item_${Date.now()}`,
-            name: "",
-            description: "",
-            type: "gear",
-            weight: 1,
-            quantity: 1,
-            damage: "",
-            range: 1,
-            baseStat: "combat",
-            bonus: 0
-        });
+        setFormData({ ...EMPTY_FORM, id: `item_${Date.now()}` });
         setIsOpen(true);
     };
 
     const handleSave = async () => {
         if (!formData.name) return;
-        
-        const finalItem: any = {
-            id: formData.id || `item_${Date.now()}`,
-            name: formData.name,
-            description: formData.description || "",
-            type: formData.type || "gear",
-            weight: Number(formData.weight) || 0,
-            quantity: Number(formData.quantity) || 1
-        };
 
-        if (formData.type === 'weapon') {
-            finalItem.damage = formData.damage || "1d10";
-            finalItem.range = Number(formData.range) || 1;
-            finalItem.baseStat = formData.baseStat || "combat";
-            finalItem.bonus = Number(formData.bonus) || 0;
-        }
+        const finalItem: Item | Weapon = formData.type === 'weapon'
+            ? {
+                id: formData.id || `item_${Date.now()}`,
+                name: formData.name,
+                description: formData.description || "",
+                type: "weapon",
+                weight: Number(formData.weight) || 0,
+                quantity: Number(formData.quantity) || 1,
+                damage: formData.damage || "1d10",
+                range: Number(formData.range) || 1,
+                baseStat: formData.baseStat || "combat",
+                bonus: Number(formData.bonus) || 0,
+            }
+            : {
+                id: formData.id || `item_${Date.now()}`,
+                name: formData.name,
+                description: formData.description || "",
+                type: formData.type,
+                weight: Number(formData.weight) || 0,
+                quantity: Number(formData.quantity) || 1,
+            };
 
         await addGlobalItem(roomId, finalItem);
         setIsOpen(false);
@@ -124,7 +134,7 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
                             </label>
                             <label className="flex flex-col">
                                 <span className="text-xs text-emerald-600 mb-1">Atributo Base</span>
-                                <select value={formData.baseStat} onChange={e => setFormData({ ...formData, baseStat: e.target.value as any })} className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2">
+                                <select value={formData.baseStat} onChange={e => setFormData({ ...formData, baseStat: e.target.value as 'combat' | 'strength' | 'speed' })} className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2">
                                     <option value="combat">Combat</option>
                                     <option value="strength">Strength</option>
                                     <option value="speed">Speed</option>
