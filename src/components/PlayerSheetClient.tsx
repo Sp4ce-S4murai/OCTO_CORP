@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog } from "@/lib/database";
 import { CharacterSheet, EncounterState } from "@/types/character";
-import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X } from "lucide-react";
+import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X, Package } from "lucide-react";
 import Link from "next/link";
 
 import { DiceCalculator } from "./DiceCalculator";
@@ -58,6 +58,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
     const [wardenToast, setWardenToast] = useState<{ text: string, id: number } | null>(null);
+    const [itemNotification, setItemNotification] = useState<{ text: string, id: number } | null>(null);
     const [shipData, setShipData] = useState<ShipState | null>(null);
 
     // Track other players in the room
@@ -179,6 +180,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                         } else if (log.result === 'Warden Panic') {
                             // Warden manually triggered a panic test
                             setShowPanicModal(true);
+                        } else if (log.result === 'Warden Message' && (log.statName.includes('RECEBEU') || log.statName.includes('PERDIDO'))) {
+                            setItemNotification({ text: log.customMessage ? `${log.statName}\n\nMensagem do Diretor: "${log.customMessage}"` : log.statName, id: Date.now() });
                         }
                     }
                     // Broadcast Warden messages as toast to all players
@@ -523,6 +526,20 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             <div className="text-cyan-200 text-sm font-mono">&quot;{wardenToast.text}&quot;</div>
                         </div>
                         <button className="text-cyan-700 hover:text-cyan-400 text-xs shrink-0 mt-1">✕</button>
+                    </div>
+                </div>
+            )}
+
+            {/* ITEM NOTIFICATION OVERLAY */}
+            {itemNotification && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in zoom-in-95" onClick={() => setItemNotification(null)}>
+                    <div className="bg-zinc-950 border-2 border-emerald-500 shadow-[0_0_50px_rgba(16,185,129,0.3)] max-w-lg w-full p-8 text-center flex flex-col items-center gap-6" onClick={e => e.stopPropagation()}>
+                        <Package size={64} className="text-emerald-500 animate-bounce" />
+                        <h2 className="text-2xl font-bold uppercase tracking-widest text-emerald-400">ATUALIZAÇÃO DE INVENTÁRIO</h2>
+                        <p className="text-emerald-200 text-sm whitespace-pre-wrap">{itemNotification.text}</p>
+                        <button onClick={() => setItemNotification(null)} className="mt-4 w-full bg-emerald-900 border border-emerald-500 hover:bg-emerald-800 text-emerald-100 font-bold uppercase tracking-widest py-4 transition-colors">
+                            Ciente
+                        </button>
                     </div>
                 </div>
             )}
@@ -964,6 +981,61 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             <StatBox label="SANIDADE" value={character.saves.sanity} penalty={getSavePenalty('sanity')} baseValue={character.baseSaves.sanity} path="baseSaves/sanity" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                             <StatBox label="MEDO" value={character.saves.fear} penalty={getSavePenalty('fear')} baseValue={character.baseSaves.fear} path="baseSaves/fear" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
                             <StatBox label="CORPO" value={character.saves.body} penalty={getSavePenalty('body')} baseValue={character.baseSaves.body} path="baseSaves/body" onUpdate={handleUpdate} disabled={isRoomLocked || isDead} />
+                        </div>
+                    </CollapsibleSection>
+                </section>
+
+                <section className="mb-8">
+                    <CollapsibleSection title="INVENTÁRIO">
+                        <div className="flex flex-col gap-2">
+                            {(!character.inventory || character.inventory.length === 0) ? (
+                                <div className="text-emerald-700/50 italic text-sm p-4 bg-emerald-950/10 border border-emerald-900/30">Sem itens registrados.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {character.inventory.map((item, index) => (
+                                        <div key={`${item.id}-${index}`} className="flex justify-between items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors">
+                                            <div className="flex flex-col">
+                                                <span className="text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                                                    {item.type === 'weapon' ? <Crosshair size={16} className="text-red-500"/> : <Package size={16}/>}
+                                                    {item.name} <span className="text-xs text-emerald-600">x{item.quantity}</span>
+                                                </span>
+                                                <span className="text-xs text-emerald-600/70 italic mt-1">{item.description}</span>
+                                                {item.type === 'weapon' && (
+                                                    <span className="text-[10px] text-red-400 mt-2 font-mono uppercase bg-red-950/30 w-max px-2 py-1 border border-red-900">
+                                                        DANO: {(item as any).damage} | ALCANCE: {(item as any).range}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {item.type === 'weapon' && (
+                                                <button 
+                                                    onClick={() => {
+                                                        const w = item as any;
+                                                        const statValue = character.stats[w.baseStat as keyof typeof character.stats] || 0;
+                                                        const totalTarget = statValue + w.bonus;
+                                                        const roll = Math.floor(Math.random() * 100);
+                                                        const success = roll < totalTarget;
+                                                        import("@/lib/database").then(({ pushLog }) => {
+                                                            pushLog(roomId, {
+                                                                timestamp: Date.now(),
+                                                                playerName: character.name,
+                                                                playerId: character.id,
+                                                                statName: `ATAQUE: ${w.name}`,
+                                                                statValue: totalTarget,
+                                                                roll: roll,
+                                                                result: success ? (roll % 10 === Math.floor(roll / 10) ? 'Critical Success' : 'Success') : (roll % 10 === Math.floor(roll / 10) ? 'Critical Failure' : 'Failure')
+                                                            });
+                                                        });
+                                                    }}
+                                                    disabled={isRoomLocked || isDead}
+                                                    className="bg-red-950/50 hover:bg-red-900 text-red-400 border border-red-800 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 disabled:opacity-50"
+                                                >
+                                                    ATIRAR / ATACAR
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </CollapsibleSection>
                 </section>

@@ -1,6 +1,6 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
-import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState } from "../types/character";
+import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon } from "../types/character";
 import { CombatState, Token } from "../types/combat";
 
 
@@ -381,4 +381,48 @@ export const removeToken = async (roomId: string, tokenId: string) => {
 export const endTacticalCombat = async (roomId: string) => {
     const cPath = ref(database, combatPath(roomId));
     await remove(cPath);
+};
+
+// --- INVENTORY SYSTEM ---
+
+export const giveItemToPlayer = async (roomId: string, playerId: string, items: (Item | Weapon)[]) => {
+    const pPath = ref(database, playerPath(roomId, playerId));
+    const snapshot = await get(pPath);
+    const character = snapshot.val() as CharacterSheet;
+    
+    if (!character) return;
+    
+    const currentInventory = character.inventory || [];
+    const newInventory = [...currentInventory, ...items];
+    
+    await update(pPath, { inventory: newInventory });
+};
+
+export const removeItemFromPlayer = async (roomId: string, playerId: string, itemIndex: number) => {
+    const pPath = ref(database, playerPath(roomId, playerId));
+    const snapshot = await get(pPath);
+    const character = snapshot.val() as CharacterSheet;
+    
+    if (!character || !character.inventory) return;
+    
+    const newInventory = character.inventory.filter((_, index) => index !== itemIndex);
+    
+    await update(pPath, { inventory: newInventory });
+};
+
+export const updatePlayerInventory = async (roomId: string, playerId: string, inventory: (Item | Weapon)[]) => {
+    const pPath = ref(database, playerPath(roomId, playerId));
+    await update(pPath, { inventory });
+};
+
+// --- TACTICAL GRID SYSTEM (EncounterState) ---
+
+export const updateTokenPosition = async (roomId: string, tokenId: string, x: number, y: number, color?: string) => {
+    const tokenPath = ref(database, `${roomPath(roomId)}/encounter/tokens/${tokenId}`);
+    await update(tokenPath, { id: tokenId, x, y, ...(color ? { color } : {}) });
+};
+
+export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
+    const tokenPath = ref(database, `${roomPath(roomId)}/encounter/tokens/${tokenId}`);
+    await remove(tokenPath);
 };

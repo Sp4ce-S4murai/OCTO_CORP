@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Dice5 } from "lucide-react";
 import { subscribeToPlayer, createEmptyCharacter, createPlayer } from "@/lib/database";
 import { CharacterSheet } from "@/types/character";
-import CombatHUD from "@/components/TacticalMap/CombatHUD";
+import { TacticalGrid } from "@/components/TacticalGrid";
 import { MiniSheet } from "@/components/MiniSheet";
 import { DiceCalculator } from "@/components/DiceCalculator";
 
@@ -56,7 +56,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                 
                 {/* Left Side: Combat Map */}
                 <main className="flex-1 relative bg-black border-r border-emerald-900/50 overflow-hidden">
-                    <CombatHUD roomId={roomId} playerId={playerId} isWarden={false} />
+                    <TacticalGrid roomId={roomId} playerId={playerId} isWarden={false} />
                 </main>
 
                 {/* Right Side: Player Data Panel */}

@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter } from "@/lib/database";
-import { RoomData, CharacterSheet, Consequence } from "@/types/character";
-import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload } from "lucide-react";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer } from "@/lib/database";
+import { RoomData, CharacterSheet, Consequence, Item, Weapon } from "@/types/character";
+import { GLOBAL_ITEMS, STARTER_KITS } from "@/lib/itemsDictionary";
+import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
@@ -40,6 +41,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         icon: "👾",
         color: "text-red-500"
     });
+
+    const [selectedPlayerToGive, setSelectedPlayerToGive] = useState<string>("");
+    const [selectedItemToGive, setSelectedItemToGive] = useState<string>("");
 
     const getCurrentOrder = () => {
         if (!roomData?.players) return [];
@@ -536,6 +540,64 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 </div>
             </header>
 
+            {/* INVENTÁRIO GLOBAL */}
+            <section className="bg-zinc-950/80 border border-emerald-900/50 p-6 flex flex-col gap-4">
+                <h2 className="text-xl font-bold tracking-widest text-emerald-500 flex items-center gap-2 uppercase">
+                    <Package size={24} /> INVENTÁRIO GLOBAL E SUPRIMENTOS
+                </h2>
+                <div className="flex flex-wrap gap-4 items-end">
+                    <div className="flex flex-col gap-1 w-64">
+                        <label className="text-xs text-emerald-600 font-bold uppercase">SELECIONAR JOGADOR</label>
+                        <select className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2 font-mono text-sm outline-none" value={selectedPlayerToGive} onChange={e => setSelectedPlayerToGive(e.target.value)}>
+                            <option value="">-- ESCOLHER ALVO --</option>
+                            {orderedPlayers.map((p: CharacterSheet) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-1 w-64">
+                        <label className="text-xs text-emerald-600 font-bold uppercase">SELECIONAR ITEM/KIT</label>
+                        <select className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2 font-mono text-sm outline-none" value={selectedItemToGive} onChange={e => setSelectedItemToGive(e.target.value)}>
+                            <option value="">-- ESCOLHER ITEM/KIT --</option>
+                            <optgroup label="ITENS INDIVIDUAIS">
+                                {Object.values(GLOBAL_ITEMS).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </optgroup>
+                            <optgroup label="STARTER KITS">
+                                {Object.keys(STARTER_KITS).map(kit => <option key={kit} value={`kit:${kit}`}>{kit.toUpperCase()}</option>)}
+                            </optgroup>
+                        </select>
+                    </div>
+                    <button 
+                        disabled={!selectedPlayerToGive || !selectedItemToGive}
+                        onClick={() => {
+                            let itemsToGive: (Item | Weapon)[] = [];
+                            let itemName = "";
+                            if (selectedItemToGive.startsWith("kit:")) {
+                                const kitKey = selectedItemToGive.replace("kit:", "");
+                                itemsToGive = STARTER_KITS[kitKey];
+                                itemName = `Kit: ${kitKey.toUpperCase()}`;
+                            } else {
+                                itemsToGive = [GLOBAL_ITEMS[selectedItemToGive]];
+                                itemName = GLOBAL_ITEMS[selectedItemToGive].name;
+                            }
+                            giveItemToPlayer(roomId, selectedPlayerToGive, itemsToGive);
+                            const targetName = roomData?.players[selectedPlayerToGive]?.name || "Desconhecido";
+                            pushLog(roomId, {
+                                timestamp: Date.now(),
+                                playerName: "SISTEMA LOGÍSTICO",
+                                playerId: selectedPlayerToGive,
+                                statName: `INVENTÁRIO ATUALIZADO: ${targetName} RECEBEU ${itemName}`,
+                                statValue: 0,
+                                roll: 0,
+                                result: 'Warden Message'
+                            });
+                            setSelectedItemToGive("");
+                        }}
+                        className="bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800 px-6 py-2 font-bold tracking-widest flex items-center gap-2 transition-colors uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        TRANSFERIR SUPRIMENTO
+                    </button>
+                </div>
+            </section>
+
             {/* PAINEL DE COMBATE */}
             <section className="bg-zinc-950/80 border border-blue-900/50 p-6 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
@@ -764,6 +826,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             {/* Modal de Inspeção Dinâmica */}
             {selectedPlayerId && roomData?.players?.[selectedPlayerId] && (
                 <PlayerModal
+                    roomId={roomId}
                     character={roomData.players[selectedPlayerId]}
                     onClose={() => setSelectedPlayerId(null)}
                     onUpdate={(path, val) => handleUpdate(selectedPlayerId, path, val as string | number | boolean)}
@@ -886,8 +949,10 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
 //
 // MÓDULO DE INSPEÇÃO (MODAL DO DIRETOR)
-function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: unknown) => void, onTriggerPanic: () => void }) {
+function PlayerModal({ roomId, character, onClose, onUpdate, onTriggerPanic }: { roomId: string, character: CharacterSheet, onClose: () => void, onUpdate: (path: string, val: unknown) => void, onTriggerPanic: () => void }) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
+    const [flavorText, setFlavorText] = useState("");
+    const [itemToDelete, setItemToDelete] = useState<number | null>(null);
 
     return (
         <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
@@ -980,6 +1045,82 @@ function PlayerModal({ character, onClose, onUpdate, onTriggerPanic }: { charact
                         </div>
                     </div>
                 )}
+
+                {/* INVENTÁRIO DO JOGADOR */}
+                <div className="mt-4 border border-blue-900/50 p-4 bg-zinc-900/50">
+                    <h3 className="text-xl border-b border-blue-900/50 pb-2 mb-4 text-blue-500 flex items-center gap-2">
+                        <Package size={20} /> INVENTÁRIO
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                        {(!character.inventory || character.inventory.length === 0) ? (
+                            <span className="text-sm text-blue-500/50 italic">Inventário Vazio</span>
+                        ) : (
+                            character.inventory.map((item, index) => (
+                                <div key={`${item.id}-${index}`} className="flex justify-between items-center bg-zinc-950 border border-blue-900/30 p-2">
+                                    <div className="flex flex-col">
+                                        <span className="text-sm text-blue-300 font-bold uppercase tracking-widest">{item.name} <span className="text-xs text-blue-500 opacity-70">x{item.quantity}</span></span>
+                                        <span className="text-xs text-blue-500/70 italic">{item.description}</span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-1">
+                                            <label className="text-[10px] text-blue-600 font-bold uppercase">QTD:</label>
+                                            <input 
+                                                type="number" 
+                                                className="w-12 bg-zinc-900 border border-blue-900 text-blue-400 text-center font-mono text-xs outline-none focus:border-blue-500" 
+                                                value={item.quantity}
+                                                onChange={(e) => {
+                                                    const newInv = [...character.inventory!];
+                                                    newInv[index].quantity = Number(e.target.value);
+                                                    onUpdate("inventory", newInv);
+                                                }}
+                                            />
+                                        </div>
+                                        {itemToDelete === index ? (
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Motivo (ex: Quebrou)..." 
+                                                    className="bg-red-950/50 border border-red-900 text-red-300 text-xs px-2 py-1 outline-none w-32"
+                                                    value={flavorText}
+                                                    onChange={e => setFlavorText(e.target.value)}
+                                                />
+                                                <button 
+                                                    className="bg-red-900 text-white text-[10px] px-2 py-1 font-bold uppercase transition hover:bg-red-800"
+                                                    onClick={() => {
+                                                        removeItemFromPlayer(roomId, character.id, index);
+                                                        pushLog(roomId, {
+                                                            timestamp: Date.now(),
+                                                            playerName: "SISTEMA LOGÍSTICO",
+                                                            playerId: character.id,
+                                                            statName: `ITEM PERDIDO: ${character.name} PERDEU ${item.name}`,
+                                                            statValue: 0,
+                                                            roll: 0,
+                                                            result: 'Warden Message',
+                                                            customMessage: flavorText || "O item foi destruído/perdido."
+                                                        });
+                                                        setItemToDelete(null);
+                                                        setFlavorText("");
+                                                    }}
+                                                >
+                                                    CONFIRMAR
+                                                </button>
+                                                <button className="text-zinc-500 hover:text-white" onClick={() => setItemToDelete(null)}><X size={14}/></button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setItemToDelete(index)}
+                                                className="text-red-500/50 hover:text-red-400 p-1 transition-colors"
+                                                title="Remover Item"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

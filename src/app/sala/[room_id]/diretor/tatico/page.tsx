@@ -1,4 +1,4 @@
-import CombatHUD from "@/components/TacticalMap/CombatHUD";
+import { TacticalGrid } from "@/components/TacticalGrid";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -23,7 +23,7 @@ export default async function DirectorTacticalPage({ params }: PageProps) {
                 <div className="w-[150px]"></div>
             </header>
             <main className="flex-1 relative bg-black">
-                <CombatHUD roomId={resolvedParams.room_id} isWarden={true} />
+                <TacticalGrid roomId={resolvedParams.room_id} isWarden={true} />
             </main>
         </div>
     );

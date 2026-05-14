@@ -47,6 +47,25 @@ export interface Consequence {
     is_fatal?: boolean; // If true, immediately kills the character upon application
 }
 
+export type ItemType = 'weapon' | 'gear' | 'tool';
+
+export interface Item {
+    id: string;
+    name: string;
+    description: string;
+    type: ItemType;
+    weight: number;
+    quantity: number;
+}
+
+export interface Weapon extends Item {
+    type: 'weapon';
+    damage: string; // e.g., "1d10"
+    range: 'Engaged' | 'Short' | 'Long';
+    baseStat: 'combat' | 'strength' | 'speed';
+    bonus: number; // modifier added to the roll
+}
+
 export interface CharacterSheet {
     id: string; // Unique ID scoped within the room
     name: string;
@@ -67,6 +86,7 @@ export interface CharacterSheet {
     skills: Skills;
     consequences?: Consequence[]; // Entropy/Panic debuffs
     hasSpokenLastWords?: boolean; // True if the character already died and sent their final message
+    inventory?: Item[]; // Players' items and weapons
 }
 
 export interface EnvironmentState {
@@ -87,6 +107,7 @@ export interface EncounterState {
     currentTurnIndex: number;
     round: number;
     npcs?: Record<string, { id: string, name: string }>; // Warden's custom NPCs
+    tokens?: Record<string, { id: string, x: number, y: number, color?: string }>; // Tactical Grid positions
 }
 
 export interface RoomData {
