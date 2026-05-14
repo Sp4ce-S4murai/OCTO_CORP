@@ -1003,8 +1003,6 @@ function PlayerModal({ roomId, character, onClose, onUpdate, onTriggerPanic }: {
                     </div>
                 </div>
 
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                     <WardenVitalBox label="SAÚDE" current={character.vitals.health.current} max={character.vitals.health.max} path="vitals/health" onUpdate={onUpdate} />
                     <WardenVitalBox label="FERIDAS" current={character.vitals.wounds.current} max={character.vitals.wounds.max} path="vitals/wounds" onUpdate={onUpdate} />
