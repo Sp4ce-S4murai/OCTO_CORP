@@ -25,38 +25,50 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
         weight: 1,
         quantity: 1
     },
-    "pulse-rifle": {
-        id: "pulse-rifle",
-        name: "Rifle de Pulso",
-        description: "Arma tática padrão militar. (3d10 Dano)",
+    "assault-rifle": {
+        id: "assault-rifle",
+        name: "Rifle de Assalto",
+        description: "Arma tática padrão militar. (4d10 Dano)",
         type: "weapon",
-        damage: "3d10",
-        range: "Long",
+        damage: "4d10",
+        range: 15,
         baseStat: "combat",
         bonus: 0,
         weight: 2,
         quantity: 1
     } as Weapon,
-    "crowbar": {
-        id: "crowbar",
-        name: "Pé de Cabra",
-        description: "Ferramenta robusta para forçar portas. Também útil no corpo a corpo.",
+    "flamethrower": {
+        id: "flamethrower",
+        name: "Lança-chamas",
+        description: "Arma de Efeito de Área. (3d10 Dano)",
         type: "weapon",
-        damage: "1d10",
-        range: "Engaged",
-        baseStat: "strength",
-        bonus: 10, // +10 Strength to hit
+        damage: "3d10",
+        range: 3,
+        baseStat: "combat",
+        bonus: 0,
+        weight: 2,
+        quantity: 1
+    } as Weapon,
+    "revolver": {
+        id: "revolver",
+        name: "Revólver",
+        description: "Arma de fogo confiável. (2d10 Dano)",
+        type: "weapon",
+        damage: "2d10",
+        range: 8,
+        baseStat: "combat",
+        bonus: 5,
         weight: 1,
         quantity: 1
     } as Weapon,
-    "smart-pistol": {
-        id: "smart-pistol",
-        name: "Pistola Smart",
-        description: "Pistola com mira assistida. (1d10 Dano)",
+    "katana": {
+        id: "katana",
+        name: "Katana",
+        description: "Lâmina monomolecular para combate corpo a corpo.",
         type: "weapon",
-        damage: "1d10",
-        range: "Short",
-        baseStat: "combat",
+        damage: "1d10+STR",
+        range: 1,
+        baseStat: "strength",
         bonus: 10,
         weight: 1,
         quantity: 1
@@ -74,17 +86,17 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
 export const STARTER_KITS: Record<string, (Item | Weapon)[]> = {
     "soldier-kit": [
         GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["pulse-rifle"],
+        GLOBAL_ITEMS["assault-rifle"],
         GLOBAL_ITEMS["stimpak"]
     ],
     "teamster-kit": [
         GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["crowbar"],
+        GLOBAL_ITEMS["katana"],
         GLOBAL_ITEMS["mag-boots"]
     ],
     "scientist-kit": [
         GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["smart-pistol"],
+        GLOBAL_ITEMS["revolver"],
         GLOBAL_ITEMS["med-scanner"]
     ]
 };

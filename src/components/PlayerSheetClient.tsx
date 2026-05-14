@@ -1010,16 +1010,34 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                 <button 
                                                     onClick={() => {
                                                         const w = item as any;
+                                                        const targetId = character.selectedTargetId;
+                                                        const encounter = roomData?.encounter;
+                                                        const myToken = encounter?.tokens?.[character.id];
+                                                        const targetToken = targetId ? encounter?.tokens?.[targetId] : null;
+
+                                                        let outOfRange = false;
+                                                        if (targetToken && myToken) {
+                                                            const dist = Math.max(Math.abs(myToken.x - targetToken.x), Math.abs(myToken.y - targetToken.y));
+                                                            if (dist > w.range) {
+                                                                outOfRange = true;
+                                                            }
+                                                        }
+
+                                                        if (outOfRange) {
+                                                            alert(`Ataque Impossível: O alvo está fora do alcance da arma (Distância > ${w.range} casas). Aproxime-se.`);
+                                                            return;
+                                                        }
+
                                                         const statValue = character.stats[w.baseStat as keyof typeof character.stats] || 0;
                                                         const totalTarget = statValue + w.bonus;
                                                         const roll = Math.floor(Math.random() * 100);
-                                                        const success = roll < totalTarget;
+                                                        const success = roll <= totalTarget;
                                                         import("@/lib/database").then(({ pushLog }) => {
                                                             pushLog(roomId, {
                                                                 timestamp: Date.now(),
                                                                 playerName: character.name,
                                                                 playerId: character.id,
-                                                                statName: `ATAQUE: ${w.name}`,
+                                                                statName: `ATAQUE: ${w.name}${targetId ? ' [NO ALVO]' : ''}`,
                                                                 statValue: totalTarget,
                                                                 roll: roll,
                                                                 result: success ? (roll % 10 === Math.floor(roll / 10) ? 'Critical Success' : 'Success') : (roll % 10 === Math.floor(roll / 10) ? 'Critical Failure' : 'Failure')

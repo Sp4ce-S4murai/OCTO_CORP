@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory } from "@/lib/database";
 import { RoomData, CharacterSheet, Consequence, Item, Weapon } from "@/types/character";
 import { GLOBAL_ITEMS, STARTER_KITS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package } from "lucide-react";
@@ -14,7 +14,7 @@ import { PanicIcon } from "./PanicIcon";
 import { ShipDashboard } from "./ShipDashboard";
 import { ShipWardenPanel } from "./ShipWardenPanel";
 import { MiniSheet } from "./MiniSheet";
-
+import { GlobalInventoryEditor } from "./GlobalInventoryEditor";
 
 
 const getTimestamp = () => Date.now();
@@ -154,6 +154,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     };
 
     useEffect(() => {
+        initializeGlobalInventory(roomId);
         const unsubscribe = subscribeToRoom(roomId, (data) => {
             setRoomData(data);
             setLoading(false);
@@ -558,7 +559,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         <select className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2 font-mono text-sm outline-none" value={selectedItemToGive} onChange={e => setSelectedItemToGive(e.target.value)}>
                             <option value="">-- ESCOLHER ITEM/KIT --</option>
                             <optgroup label="ITENS INDIVIDUAIS">
-                                {Object.values(GLOBAL_ITEMS).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                {Object.values(roomData?.globalInventory || {}).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </optgroup>
                             <optgroup label="STARTER KITS">
                                 {Object.keys(STARTER_KITS).map(kit => <option key={kit} value={`kit:${kit}`}>{kit.toUpperCase()}</option>)}
@@ -575,8 +576,11 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                 itemsToGive = STARTER_KITS[kitKey];
                                 itemName = `Kit: ${kitKey.toUpperCase()}`;
                             } else {
-                                itemsToGive = [GLOBAL_ITEMS[selectedItemToGive]];
-                                itemName = GLOBAL_ITEMS[selectedItemToGive].name;
+                                const gItem = roomData?.globalInventory?.[selectedItemToGive];
+                                if (gItem) {
+                                    itemsToGive = [gItem];
+                                    itemName = gItem.name;
+                                }
                             }
                             giveItemToPlayer(roomId, selectedPlayerToGive, itemsToGive);
                             const targetName = roomData?.players[selectedPlayerToGive]?.name || "Desconhecido";
@@ -597,6 +601,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     </button>
                 </div>
             </section>
+
+            {/* EDITOR DE INVENTÁRIO GLOBAL */}
+            <GlobalInventoryEditor roomId={roomId} globalInventory={roomData?.globalInventory} />
 
             {/* PAINEL DE COMBATE */}
             <section className="bg-zinc-950/80 border border-blue-900/50 p-6 flex flex-col gap-4">
@@ -996,7 +1003,9 @@ function PlayerModal({ roomId, character, onClose, onUpdate, onTriggerPanic }: {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
                     <WardenVitalBox label="SAÚDE" current={character.vitals.health.current} max={character.vitals.health.max} path="vitals/health" onUpdate={onUpdate} />
                     <WardenVitalBox label="FERIDAS" current={character.vitals.wounds.current} max={character.vitals.wounds.max} path="vitals/wounds" onUpdate={onUpdate} />
                     <div className="border border-emerald-900/50 bg-zinc-900/50 p-4 shrink-0">
@@ -1015,6 +1024,14 @@ function PlayerModal({ roomId, character, onClose, onUpdate, onTriggerPanic }: {
                                 value={character.vitals.stress.min || 0}
                                 onChange={(e) => onUpdate("vitals/stress/min", Number(e.target.value))}
                             />
+                        </div>
+                    </div>
+                    <div className="border border-emerald-900/50 bg-zinc-900/50 p-4 shrink-0">
+                        <div className="text-emerald-600 mb-2 font-bold text-sm tracking-widest">MOVIMENTO MÁXIMO</div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => onUpdate("movementPoints/max", (character.movementPoints?.max || 6) - 1)} className="text-red-500 bg-red-950/50 px-2 py-1 font-bold">-</button>
+                            <span className="font-bold text-white text-xl w-12 text-center">{character.movementPoints?.max || 6}</span>
+                            <button onClick={() => onUpdate("movementPoints/max", (character.movementPoints?.max || 6) + 1)} className="text-emerald-500 bg-emerald-950/50 px-2 py-1 font-bold">+</button>
                         </div>
                     </div>
                 </div>

@@ -61,7 +61,7 @@ export interface Item {
 export interface Weapon extends Item {
     type: 'weapon';
     damage: string; // e.g., "1d10"
-    range: 'Engaged' | 'Short' | 'Long';
+    range: number; // Range in grid squares
     baseStat: 'combat' | 'strength' | 'speed';
     bonus: number; // modifier added to the roll
 }
@@ -87,6 +87,8 @@ export interface CharacterSheet {
     consequences?: Consequence[]; // Entropy/Panic debuffs
     hasSpokenLastWords?: boolean; // True if the character already died and sent their final message
     inventory?: Item[]; // Players' items and weapons
+    movementPoints: { current: number; max: number }; // Tactical grid movement
+    selectedTargetId?: string; // ID of the currently targeted token
 }
 
 export interface EnvironmentState {
@@ -99,6 +101,14 @@ export interface EnvironmentState {
     radiation: string; // e.g. "Seguro", "Letal"
 }
 
+export interface GridToken {
+    id: string;
+    x: number;
+    y: number;
+    color?: string;
+    movementPoints: { current: number; max: number };
+}
+
 export interface EncounterState {
     isActive: boolean;
     status: 'rolling' | 'active'; // 'rolling' means waiting for inputs, 'active' means combat is running
@@ -107,7 +117,7 @@ export interface EncounterState {
     currentTurnIndex: number;
     round: number;
     npcs?: Record<string, { id: string, name: string }>; // Warden's custom NPCs
-    tokens?: Record<string, { id: string, x: number, y: number, color?: string }>; // Tactical Grid positions
+    tokens?: Record<string, GridToken>; // Tactical Grid positions
 }
 
 export interface RoomData {
@@ -127,6 +137,7 @@ export interface RoomData {
     logs: Record<string, RollLog>;
     activeImage?: string;
     ship?: ShipState;
+    globalInventory?: Record<string, Item | Weapon>; // Dynamic room-scoped item db
 }
 
 export interface RollLog {

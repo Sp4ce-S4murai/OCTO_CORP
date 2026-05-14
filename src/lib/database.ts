@@ -195,12 +195,22 @@ export const submitInitiative = async (roomId: string, playerId: string, value: 
 
 export const beginTurns = async (roomId: string, sortedPlayerIds: string[]) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
-    await update(encPath, {
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    
+    const updates: any = {
         status: 'active',
         turnOrder: sortedPlayerIds,
         currentTurnIndex: 0,
         round: 1
-    });
+    };
+
+    const firstEntityId = sortedPlayerIds[0];
+    if (encounter?.tokens && encounter.tokens[firstEntityId]) {
+        updates[`tokens/${firstEntityId}/movementPoints/current`] = encounter.tokens[firstEntityId].movementPoints.max;
+    }
+
+    await update(encPath, updates);
 };
 
 export const nextTurn = async (roomId: string, encounter: EncounterState) => {
@@ -219,6 +229,10 @@ export const nextTurn = async (roomId: string, encounter: EncounterState) => {
         round: newRound
     };
 
+    const nextEntityId = encounter.turnOrder[nextIndex];
+    if (encounter.tokens && encounter.tokens[nextEntityId]) {
+        updates[`tokens/${nextEntityId}/movementPoints/current`] = encounter.tokens[nextEntityId].movementPoints.max;
+    }
 
     await update(encPath, updates);
 };
@@ -247,6 +261,13 @@ export const addNPCToEncounter = async (
     const updates: any = {};
     updates[`npcs/${npcId}`] = { id: npcId, name: npcData.name };
     updates[`initiatives/${npcId}`] = npcData.initiative;
+    updates[`tokens/${npcId}`] = {
+        id: npcId,
+        x: 0,
+        y: 0,
+        color: npcData.color,
+        movementPoints: { current: 6, max: 6 } // Default 6
+    };
     
 
     // If active, recalculate turn order
@@ -417,12 +438,75 @@ export const updatePlayerInventory = async (roomId: string, playerId: string, in
 
 // --- TACTICAL GRID SYSTEM (EncounterState) ---
 
-export const updateTokenPosition = async (roomId: string, tokenId: string, x: number, y: number, color?: string) => {
+export const updateTokenPosition = async (roomId: string, tokenId: string, x: number, y: number, color?: string, maxMovement?: number) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    
+    const existingToken = encounter?.tokens?.[tokenId];
+    
+    const tokenData = { 
+        id: tokenId, 
+        x, 
+        y, 
+        ...(color ? { color } : (existingToken?.color ? { color: existingToken.color } : {})),
+        movementPoints: existingToken?.movementPoints || { current: maxMovement || 6, max: maxMovement || 6 }
+    };
+    
     const tokenPath = ref(database, `${roomPath(roomId)}/encounter/tokens/${tokenId}`);
-    await update(tokenPath, { id: tokenId, x, y, ...(color ? { color } : {}) });
+    await update(tokenPath, tokenData);
+};
+
+export const deductTokenMovement = async (roomId: string, tokenId: string, distance: number) => {
+    const mpPath = ref(database, `${roomPath(roomId)}/encounter/tokens/${tokenId}/movementPoints/current`);
+    const snapshot = await get(mpPath);
+    const current = snapshot.val() as number;
+    if (current !== null && current >= distance) {
+        await set(mpPath, current - distance);
+    }
 };
 
 export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
-    const tokenPath = ref(database, `${roomPath(roomId)}/encounter/tokens/${tokenId}`);
-    await remove(tokenPath);
+    if (tokenId.startsWith('npc_')) {
+        await removeNPCFromEncounter(roomId, tokenId);
+        return;
+    }
+
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    
+    const updates: any = {};
+    updates[`tokens/${tokenId}`] = null;
+    
+    if (encounter?.turnOrder) {
+        const newOrder = encounter.turnOrder.filter(id => id !== tokenId);
+        updates[`turnOrder`] = newOrder;
+        let newIndex = encounter.currentTurnIndex;
+        if (newIndex >= newOrder.length) newIndex = 0;
+        updates[`currentTurnIndex`] = newIndex;
+    }
+    
+    await update(encPath, updates);
+};
+
+// --- GLOBAL INVENTORY ---
+
+export const initializeGlobalInventory = async (roomId: string) => {
+    const invPath = ref(database, `${roomPath(roomId)}/globalInventory`);
+    const snapshot = await get(invPath);
+    if (!snapshot.exists()) {
+        const { GLOBAL_ITEMS } = await import('./itemsDictionary');
+        await set(invPath, GLOBAL_ITEMS);
+    }
+};
+
+export const addGlobalItem = async (roomId: string, item: Item | Weapon) => {
+    const itemPath = ref(database, `${roomPath(roomId)}/globalInventory/${item.id}`);
+    await set(itemPath, item);
+};
+
+export const deleteGlobalItem = async (roomId: string, itemId: string) => {
+    const itemPath = ref(database, `${roomPath(roomId)}/globalInventory/${itemId}`);
+    await remove(itemPath);
 };
