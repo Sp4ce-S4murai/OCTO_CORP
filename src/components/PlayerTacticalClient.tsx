@@ -73,7 +73,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                         </div>
                         {/* Dice Calculator Box */}
                         <div className="bg-zinc-900/50 border border-emerald-900/50 rounded-sm">
-                            <DiceCalculator roomId={roomId} playerName={character.name || "UNIDADE"} playerId={playerId} />
+                            <DiceCalculator roomId={roomId} character={character} />
                         </div>
                     </div>
                 </aside>
