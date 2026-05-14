@@ -14,7 +14,7 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const [formData, setFormData] = useState<Partial<Weapon>>({
+    const [formData, setFormData] = useState<Partial<Weapon & Item> & { type: ItemType }>({
         id: "",
         name: "",
         description: "",
