@@ -58,6 +58,16 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
     const [wardenToast, setWardenToast] = useState<{ text: string, id: number } | null>(null);
+
+    const [showPopupId, setShowPopupId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (encounter?.lastAttackEvent?.id) {
+            setShowPopupId(encounter.lastAttackEvent.id);
+            const timer = setTimeout(() => setShowPopupId(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [encounter?.lastAttackEvent?.id]);
     const [itemNotification, setItemNotification] = useState<{ text: string, id: number } | null>(null);
     const [shipData, setShipData] = useState<ShipState | null>(null);
 
@@ -1143,6 +1153,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                                 if (isCrit) totalDmg *= 2;
                                                                 const newHp = Math.max(0, targetNpc.hp - totalDmg);
                                                                 updateNpcHp(roomId, targetNpc.id, newHp);
+                                                                const msg = `Dano: ${totalDmg} | HP restante: ${newHp}/${targetNpc.maxHp}`;
                                                                 pushLog(roomId, {
                                                                     timestamp: Date.now(),
                                                                     playerName: character.name,
@@ -1151,9 +1162,26 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                                     statValue: totalTarget,
                                                                     roll,
                                                                     result,
-                                                                    customMessage: `Dano: ${totalDmg} | HP restante: ${newHp}/${targetNpc.maxHp}`
+                                                                    customMessage: msg
+                                                                });
+
+                                                                import("@/lib/firebase").then(({ database }) => {
+                                                                    import("firebase/database").then(({ ref, update }) => {
+                                                                        update(ref(database, `rooms/${roomId}/encounter`), {
+                                                                            lastAttackEvent: {
+                                                                                id: Date.now(),
+                                                                                attacker: character.name.toUpperCase(),
+                                                                                target: targetNpc.name.toUpperCase(),
+                                                                                weapon: w.name,
+                                                                                damage: totalDmg,
+                                                                                message: msg,
+                                                                                success: true
+                                                                            }
+                                                                        });
+                                                                    });
                                                                 });
                                                             } else {
+                                                                const msg = "Falha no ataque.";
                                                                 pushLog(roomId, {
                                                                     timestamp: Date.now(),
                                                                     playerName: character.name,
@@ -1162,6 +1190,23 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                                     statValue: totalTarget,
                                                                     roll,
                                                                     result,
+                                                                    customMessage: msg
+                                                                });
+
+                                                                import("@/lib/firebase").then(({ database }) => {
+                                                                    import("firebase/database").then(({ ref, update }) => {
+                                                                        update(ref(database, `rooms/${roomId}/encounter`), {
+                                                                            lastAttackEvent: {
+                                                                                id: Date.now(),
+                                                                                attacker: character.name.toUpperCase(),
+                                                                                target: targetNpc.name.toUpperCase(),
+                                                                                weapon: w.name,
+                                                                                damage: 0,
+                                                                                message: msg,
+                                                                                success: false
+                                                                            }
+                                                                        });
+                                                                    });
                                                                 });
                                                             }
                                                         }}
@@ -1266,6 +1311,29 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 </div>
             </aside>
             </div>
+
+            {/* GLOBAL ATTACK POPUP */}
+            {encounter?.lastAttackEvent && showPopupId === encounter.lastAttackEvent.id && (
+                <div key={encounter.lastAttackEvent.id} className="fixed inset-x-0 top-1/4 z-[500] pointer-events-none flex justify-center animate-in fade-in slide-in-from-top-10 zoom-in duration-300">
+                    <div className="bg-zinc-950/90 border-2 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.5)] p-6 max-w-lg w-full flex flex-col items-center gap-3 backdrop-blur-md">
+                        <Swords size={48} className="text-red-500 animate-pulse" />
+                        <div className="text-center">
+                            <span className="text-red-400 font-bold uppercase tracking-widest text-lg block">{encounter.lastAttackEvent.attacker} atacou {encounter.lastAttackEvent.target}</span>
+                            <span className="text-zinc-300 font-mono text-sm block mt-1">Arma: {encounter.lastAttackEvent.weapon}</span>
+                        </div>
+                        <div className="bg-red-950/50 border border-red-900/50 w-full p-3 text-center mt-2">
+                            {encounter.lastAttackEvent.success ? (
+                                <>
+                                    <span className="text-red-500 font-black text-2xl tracking-widest uppercase animate-pulse">CAUSANDO {encounter.lastAttackEvent.damage} DE DANO</span>
+                                    <span className="text-[10px] text-zinc-400 block mt-1 italic">{encounter.lastAttackEvent.message}</span>
+                                </>
+                            ) : (
+                                <span className="text-zinc-500 font-bold uppercase tracking-widest">ATAQUE FALHOU</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

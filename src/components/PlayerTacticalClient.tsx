@@ -110,10 +110,11 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
         let result = "";
         let detail = `Rolou ${hitRoll} vs ${statValue} (${weapon.baseStat.toUpperCase()} + bônus)`;
         let dmgDetail = "";
+        let finalDmg = 0;
 
         if (isHit) {
             const { total: dmg, detail: dDetail } = rollDice(weapon.damage);
-            const finalDmg = isCrit ? dmg * 2 : dmg;
+            finalDmg = isCrit ? dmg * 2 : dmg;
             dmgDetail = `DANO: ${finalDmg}${isCrit ? " (CRÍTICO x2!)" : ""} ${dDetail}`;
             result = isCrit ? "💥 CRÍTICO!" : "✅ ACERTOU!";
 
@@ -133,6 +134,8 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             || roomData?.players?.[targetId]?.name
             || "Alvo";
 
+        const msg = `${result} | ${detail}${dmgDetail ? " | " + dmgDetail : ""}`;
+
         pushLog(roomId, {
             timestamp: Date.now(),
             playerName: character.name,
@@ -141,7 +144,24 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             statValue: statValue,
             roll: hitRoll,
             result: isHit ? (isCrit ? "Critical Success" : "Success") : "Failure",
-            customMessage: `${result} | ${detail}${dmgDetail ? " | " + dmgDetail : ""}`,
+            customMessage: msg,
+        });
+
+        // Broadcast popup
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, update }) => {
+                update(ref(database, `rooms/${roomId}/encounter`), {
+                    lastAttackEvent: {
+                        id: Date.now(),
+                        attacker: character.name.toUpperCase(),
+                        target: targetName.toUpperCase(),
+                        weapon: weapon.name,
+                        damage: finalDmg,
+                        message: msg,
+                        success: isHit
+                    }
+                });
+            });
         });
 
         setAttackFeedback({ weaponName: weapon.name, result, detail: `${detail}${dmgDetail ? " | " + dmgDetail : ""}`, success: isHit });

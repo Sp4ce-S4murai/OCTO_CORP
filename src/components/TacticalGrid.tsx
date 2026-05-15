@@ -43,8 +43,8 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [showNpcForm, setShowNpcForm] = useState(false);
     const [newAttack, setNewAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     const [expandedNpc, setExpandedNpc] = useState<string | null>(null);
-    // Warden: per-NPC damage controls { playerId, amount }
-    const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number }>>({}); 
+    // Warden: per-NPC damage controls { playerId, amount, attackIndex }
+    const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number; attackIndex?: number }>>({}); 
 
     useEffect(() => {
         const unsub = subscribeToRoom(roomId, (data) => setRoomData(data));
@@ -55,14 +55,30 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const tokens = encounter?.tokens || {};
     const npcs = encounter?.npcs || {};
 
-    // Whose turn is it?
     const currentTurnId = encounter?.status === 'active' ? encounter.turnOrder?.[encounter.currentTurnIndex] : null;
     const isMyTurn = !isWarden && !!playerId && currentTurnId === playerId;
 
     const activeTokenId = isWarden ? selectedTokenId : playerId;
     const activeToken = activeTokenId ? tokens[activeTokenId] : null;
 
+    const [showPopupId, setShowPopupId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (roomData?.encounter?.lastAttackEvent?.id) {
+            setShowPopupId(roomData.encounter.lastAttackEvent.id);
+            const timer = setTimeout(() => setShowPopupId(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [roomData?.encounter?.lastAttackEvent?.id]);
+
     const getTokenMaxRange = (tId: string) => {
+        if (tId.startsWith('npc_')) {
+            const npc = npcs[tId];
+            if (npc && npc.attacks && npc.attacks.length > 0) {
+                return Math.max(...npc.attacks.map(w => w.range));
+            }
+            return 1;
+        }
         const char = roomData?.players?.[tId];
         if (!char || !char.inventory) return 0;
         const weapons = char.inventory.filter(i => i.type === 'weapon') as Weapon[];
@@ -166,25 +182,74 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
     const handleNpcAttackPlayer = (npcId: string) => {
         const ctrl = npcDmgControls[npcId];
-        if (!ctrl?.playerId || ctrl.amount <= 0) return;
+        if (!ctrl?.playerId) return;
         const npc = npcs[npcId];
         const target = roomData?.players?.[ctrl.playerId];
         if (!target) return;
 
+        let totalDmg = 0;
+        let dmgDetail = "";
+        let attackName = "Ataque Básico";
+
+        if (ctrl.attackIndex !== undefined && npc.attacks && npc.attacks[ctrl.attackIndex]) {
+            const atk = npc.attacks[ctrl.attackIndex];
+            attackName = atk.name;
+            const dmgParts = atk.damage.match(/(\d+)d(\d+)(?:\+?(\d+))?/i);
+            if (dmgParts) {
+                const dice = parseInt(dmgParts[1]);
+                const sides = parseInt(dmgParts[2]);
+                const bonus = parseInt(dmgParts[3] || '0');
+                const rolls = [];
+                for (let d = 0; d < dice; d++) {
+                    const r = Math.floor(Math.random() * sides) + 1;
+                    rolls.push(r);
+                    totalDmg += r;
+                }
+                totalDmg += bonus;
+                dmgDetail = `(D${sides}: ${rolls.join(', ')})${bonus ? ' +' + bonus : ''}`;
+            } else {
+                totalDmg = parseInt(atk.damage) || 1;
+                dmgDetail = `(Fixo: ${totalDmg})`;
+            }
+        } else {
+            totalDmg = ctrl.amount || 5;
+            dmgDetail = `(Dano Direto)`;
+            if (totalDmg <= 0) return;
+        }
+
         // Deduct HP from player
         const currentHp = target.vitals?.health?.current ?? 0;
-        const newHp = Math.max(0, currentHp - ctrl.amount);
+        const newHp = Math.max(0, currentHp - totalDmg);
         updatePlayerNested(roomId, ctrl.playerId, 'vitals/health/current', newHp);
+
+        const msg = `Dano: ${totalDmg} ${dmgDetail} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}`;
 
         pushLog(roomId, {
             timestamp: Date.now(),
             playerName: npc?.name || 'NPC',
             playerId: ctrl.playerId,
-            statName: `ATAQUE DE ${(npc?.name || 'NPC').toUpperCase()} → ${target.name.toUpperCase()}`,
-            statValue: ctrl.amount,
+            statName: `ATAQUE DE ${(npc?.name || 'NPC').toUpperCase()} → ${target.name.toUpperCase()} (${attackName})`,
+            statValue: totalDmg,
             roll: 0,
             result: 'Warden Damage',
-            customMessage: `Dano: ${ctrl.amount} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}`,
+            customMessage: msg,
+        });
+
+        // Broadcast popup
+        import("@/lib/firebase").then(({ database }) => {
+            import("firebase/database").then(({ ref, update }) => {
+                update(ref(database, `rooms/${roomId}/encounter`), {
+                    lastAttackEvent: {
+                        id: Date.now(),
+                        attacker: (npc?.name || 'NPC').toUpperCase(),
+                        target: target.name.toUpperCase(),
+                        weapon: attackName,
+                        damage: totalDmg,
+                        message: msg,
+                        success: true
+                    }
+                });
+            });
         });
     };
 
@@ -287,18 +352,30 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                                             ))}
                                                         </select>
-                                                        <input
-                                                            type="number" min={1}
-                                                            className="w-12 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] text-center outline-none font-mono"
-                                                            value={npcDmgControls[npc.id]?.amount ?? 5}
-                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '' }), amount: Number(e.target.value) } }))}
-                                                        />
+                                                        <select
+                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] outline-none font-mono"
+                                                            value={npcDmgControls[npc.id]?.attackIndex ?? -1}
+                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '', amount: 5 }), attackIndex: Number(e.target.value) === -1 ? undefined : Number(e.target.value) } }))}
+                                                        >
+                                                            <option value="-1">Dano Direto</option>
+                                                            {npc.attacks?.map((atk, i) => (
+                                                                <option key={i} value={i}>{atk.name} ({atk.damage})</option>
+                                                            ))}
+                                                        </select>
+                                                        {npcDmgControls[npc.id]?.attackIndex === undefined && (
+                                                            <input
+                                                                type="number" min={1}
+                                                                className="w-12 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] text-center outline-none font-mono"
+                                                                value={npcDmgControls[npc.id]?.amount ?? 5}
+                                                                onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '' }), amount: Number(e.target.value) } }))}
+                                                            />
+                                                        )}
                                                         <button
                                                             onClick={() => handleNpcAttackPlayer(npc.id)}
                                                             disabled={!npcDmgControls[npc.id]?.playerId}
-                                                            className="bg-red-900 hover:bg-red-700 text-red-100 px-2 py-1 text-[10px] font-bold uppercase border border-red-700 disabled:opacity-30 transition-colors"
+                                                            className="bg-red-900 hover:bg-red-700 text-red-100 px-2 py-1 text-[10px] font-bold uppercase border border-red-700 disabled:opacity-30 transition-colors w-full mt-1"
                                                         >
-                                                            DMG
+                                                            EXECUTAR ATAQUE
                                                         </button>
                                                     </div>
                                                 </div>
@@ -611,6 +688,29 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                 </div>
                 </div> {/* end grid canvas */}
             </div> {/* end grid area flex-col */}
+
+            {/* GLOBAL ATTACK POPUP */}
+            {roomData?.encounter?.lastAttackEvent && showPopupId === roomData.encounter.lastAttackEvent.id && (
+                <div key={roomData.encounter.lastAttackEvent.id} className="absolute inset-x-0 top-1/4 z-[500] pointer-events-none flex justify-center animate-in fade-in slide-in-from-top-10 zoom-in duration-300">
+                    <div className="bg-zinc-950/90 border-2 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.5)] p-6 max-w-lg w-full flex flex-col items-center gap-3 backdrop-blur-md">
+                        <Swords size={48} className="text-red-500 animate-pulse" />
+                        <div className="text-center">
+                            <span className="text-red-400 font-bold uppercase tracking-widest text-lg block">{roomData.encounter.lastAttackEvent.attacker} atacou {roomData.encounter.lastAttackEvent.target}</span>
+                            <span className="text-zinc-300 font-mono text-sm block mt-1">Arma: {roomData.encounter.lastAttackEvent.weapon}</span>
+                        </div>
+                        <div className="bg-red-950/50 border border-red-900/50 w-full p-3 text-center mt-2">
+                            {roomData.encounter.lastAttackEvent.success ? (
+                                <>
+                                    <span className="text-red-500 font-black text-2xl tracking-widest uppercase animate-pulse">CAUSANDO {roomData.encounter.lastAttackEvent.damage} DE DANO</span>
+                                    <span className="text-[10px] text-zinc-400 block mt-1 italic">{roomData.encounter.lastAttackEvent.message}</span>
+                                </>
+                            ) : (
+                                <span className="text-zinc-500 font-bold uppercase tracking-widest">ATAQUE FALHOU</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
