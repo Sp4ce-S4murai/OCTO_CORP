@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Swords, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { subscribeToPlayer, subscribeToRoom, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested } from "@/lib/database";
+import { subscribeToPlayer, subscribeToRoom, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested, updateNpcHp } from "@/lib/database";
 import { CharacterSheet, Weapon, RoomData } from "@/types/character";
 import { TacticalGrid } from "@/components/TacticalGrid";
 import { MiniSheet } from "@/components/MiniSheet";
@@ -92,6 +92,15 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             const finalDmg = isCrit ? dmg * 2 : dmg;
             dmgDetail = `DANO: ${finalDmg}${isCrit ? " (CRÍTICO x2!)" : ""} ${dDetail}`;
             result = isCrit ? "💥 CRÍTICO!" : "✅ ACERTOU!";
+
+            // Apply damage to NPC if target is an NPC
+            if (targetId.startsWith('npc_')) {
+                const targetNpc = roomData?.encounter?.npcs?.[targetId];
+                if (targetNpc) {
+                    const newHp = Math.max(0, targetNpc.hp - finalDmg);
+                    updateNpcHp(roomId, targetId, newHp);
+                }
+            }
         } else {
             result = "❌ ERROU!";
         }

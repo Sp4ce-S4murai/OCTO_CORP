@@ -745,7 +745,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                             {/* Expanded: apply damage to player */}
                                             {isExpanded && !npc.isDead && (
                                                 <div className="px-2 pb-2 border-t border-red-900/30 pt-2 flex flex-col gap-2">
-                                                    <span className="text-[10px] text-red-400 font-bold uppercase">Aplicar Dano do NPC em Jogador:</span>
+                                                    <span className="text-[10px] text-red-400 font-bold uppercase">Aplicar Dano Direto em Jogador:</span>
                                                     <div className="flex gap-1 items-center flex-wrap">
                                                         <select
                                                             className="flex-1 bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs outline-none font-mono"
@@ -774,7 +774,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                                                     timestamp: Date.now(),
                                                                     playerName: npc.name,
                                                                     playerId: dmgCtrl.playerId,
-                                                                    statName: `ATAQUE DE ${npc.name.toUpperCase()} EM ${target.name.toUpperCase()}`,
+                                                                    statName: `DANO DIRETO DE ${npc.name.toUpperCase()} EM ${target.name.toUpperCase()}`,
                                                                     statValue: dmgCtrl.amount,
                                                                     roll: 0,
                                                                     result: 'Warden Damage'
@@ -785,6 +785,61 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                                             <Zap size={10}/> DAR DANO
                                                         </button>
                                                     </div>
+
+                                                    {/* Configured attacks */}
+                                                    {npc.attacks && npc.attacks.length > 0 && (
+                                                        <div className="mt-2 border-t border-red-900/30 pt-2">
+                                                            <span className="text-[10px] text-red-400 font-bold uppercase block mb-1">Ataques Definidos:</span>
+                                                            <div className="flex flex-col gap-1">
+                                                                {npc.attacks.map((atk, i) => (
+                                                                    <div key={i} className="flex flex-col bg-red-950/20 border border-red-900/30 p-1">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-[10px] text-red-300 font-bold uppercase">{atk.name}</span>
+                                                                            <span className="text-[10px] text-zinc-400 font-mono">{atk.damage} | {atk.range}sq</span>
+                                                                        </div>
+                                                                        <button
+                                                                            disabled={!dmgCtrl.playerId}
+                                                                            onClick={() => {
+                                                                                const target = roomData?.players?.[dmgCtrl.playerId];
+                                                                                if (!target) return;
+                                                                                
+                                                                                // Roll damage
+                                                                                const match = atk.damage.match(/^(\d+)d(\d+)(?:\+?(\d+))?$/i);
+                                                                                let totalDmg = 0;
+                                                                                let dDetail = "";
+                                                                                if (match) {
+                                                                                    const count = parseInt(match[1]);
+                                                                                    const sides = parseInt(match[2]);
+                                                                                    const bonus = match[3] ? parseInt(match[3]) : 0;
+                                                                                    const rolls = [];
+                                                                                    for (let d=0; d<count; d++) rolls.push(Math.floor(Math.random()*sides)+1);
+                                                                                    totalDmg = rolls.reduce((a,b)=>a+b,0) + bonus;
+                                                                                    dDetail = `[${rolls.join("+")}]${bonus ? `+${bonus}` : ""}`;
+                                                                                } else {
+                                                                                    totalDmg = parseInt(atk.damage) || 1;
+                                                                                }
+
+                                                                                handleDamage(dmgCtrl.playerId, totalDmg);
+                                                                                pushLog(roomId, {
+                                                                                    timestamp: Date.now(),
+                                                                                    playerName: npc.name,
+                                                                                    playerId: dmgCtrl.playerId,
+                                                                                    statName: `ATAQUE (${atk.name}) → ${target.name.toUpperCase()}`,
+                                                                                    statValue: totalDmg,
+                                                                                    roll: 0,
+                                                                                    result: 'Success',
+                                                                                    customMessage: `Dano: ${totalDmg} ${dDetail}`
+                                                                                });
+                                                                            }}
+                                                                            className="mt-1 bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-0.5 text-[10px] font-bold uppercase border border-red-700 disabled:opacity-40 transition-colors w-full flex items-center justify-center gap-1"
+                                                                        >
+                                                                            <Swords size={10}/> ROLAR ATAQUE
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -848,6 +903,23 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                         ))}
                                     </div>
                                 </div>
+                                {/* Attacks selector */}
+                                <div className="w-full border-t border-red-900/30 pt-2 mt-1">
+                                    <span className="text-[10px] text-red-500/70 uppercase">Ataques ({newNpc.attacks.length})</span>
+                                    {newNpc.attacks.map((atk, i) => (
+                                        <div key={i} className="flex items-center gap-1 mt-1">
+                                            <span className="text-[10px] text-red-300 flex-1 truncate font-mono">{atk.name} | {atk.damage} | {atk.range}sq</span>
+                                            <button onClick={() => setNewNpc(p => ({ ...p, attacks: p.attacks.filter((_, idx) => idx !== i) }))} className="text-red-700 hover:text-red-400"><X size={10} /></button>
+                                        </div>
+                                    ))}
+                                    <div className="flex gap-1 mt-1 w-full flex-wrap">
+                                        <input type="text" placeholder="Ataque" value={newNpcAttack.name} onChange={e => setNewNpcAttack(p => ({ ...p, name: e.target.value }))} className="flex-1 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono min-w-[80px]" />
+                                        <input type="text" placeholder="Dano" value={newNpcAttack.damage} onChange={e => setNewNpcAttack(p => ({ ...p, damage: e.target.value }))} className="w-16 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono" />
+                                        <input type="number" placeholder="Alc" value={newNpcAttack.range} onChange={e => setNewNpcAttack(p => ({ ...p, range: Number(e.target.value) }))} className="w-10 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono" />
+                                        <button onClick={() => { if(newNpcAttack.name && newNpcAttack.damage) { setNewNpc(p => ({ ...p, attacks: [...p.attacks, newNpcAttack] })); setNewNpcAttack({ name: "", damage: "1d10", range: 1 }); } }} className="bg-red-900/50 hover:bg-red-800 text-red-300 px-2 font-bold border border-red-800 text-xs">+</button>
+                                    </div>
+                                </div>
+
                                 <button
                                     onClick={() => {
                                         if(newNpc.name.trim()) {
@@ -859,14 +931,14 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                                 hp: newNpc.hp,
                                                 maxHp: newNpc.hp,
                                                 movementMax: newNpc.movementMax,
-                                                attacks: [],
+                                                attacks: newNpc.attacks,
                                             });
                                             setNewNpc({ name: '', initiative: 10, icon: '👾', color: 'text-red-500', hp: 20, maxHp: 20, movementMax: 6, attacks: [] });
                                         }
                                     }}
-                                    className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800 flex items-center gap-1"
+                                    className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800 flex items-center gap-1 mt-2 w-full justify-center"
                                 >
-                                    <Plus size={12}/> INSERIR
+                                    <Plus size={12}/> INSERIR AMEAÇA
                                 </button>
                             </div>
                         </div>
