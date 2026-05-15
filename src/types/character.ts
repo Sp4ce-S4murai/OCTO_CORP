@@ -87,7 +87,7 @@ export interface CharacterSheet {
     consequences?: Consequence[]; // Entropy/Panic debuffs
     hasSpokenLastWords?: boolean; // True if the character already died and sent their final message
     inventory?: Item[]; // Players' items and weapons
-    movementPoints: { current: number; max: number }; // Tactical grid movement
+    movementPoints?: { current: number; max: number }; // Tactical grid movement (optional, defaulted at runtime)
     selectedTargetId?: string; // ID of the currently targeted token
 }
 

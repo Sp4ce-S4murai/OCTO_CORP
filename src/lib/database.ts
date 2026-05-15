@@ -146,7 +146,7 @@ export const clearActivePanicTest = async (roomId: string) => {
     await remove(pPath);
 };
 
-export const updatePlayerNested = async (roomId: string, playerId: string, path: string, value: string | number | boolean) => {
+export const updatePlayerNested = async (roomId: string, playerId: string, path: string, value: string | number | boolean | null) => {
     const pPath = ref(database, playerPath(roomId, playerId));
     await update(pPath, { [path]: value });
 };

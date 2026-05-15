@@ -1011,7 +1011,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                     onClick={() => {
                                                         const w = item as any;
                                                         const targetId = character.selectedTargetId;
-                                                        const encounter = roomData?.encounter;
+                                                        // 'encounter' is subscribed separately in this component
                                                         const myToken = encounter?.tokens?.[character.id];
                                                         const targetToken = targetId ? encounter?.tokens?.[targetId] : null;
 
