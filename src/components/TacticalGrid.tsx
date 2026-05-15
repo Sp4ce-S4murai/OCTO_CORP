@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData } from "@/lib/database";
+import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn } from "@/lib/database";
 import { RoomData, EncounterState, Weapon, NpcAttack } from "@/types/character";
-import { Trash2, Target, Plus, Minus, Crosshair, Skull, Swords, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward } from "lucide-react";
 
 interface TacticalGridProps {
     roomId: string;
@@ -43,6 +43,8 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [showNpcForm, setShowNpcForm] = useState(false);
     const [newAttack, setNewAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     const [expandedNpc, setExpandedNpc] = useState<string | null>(null);
+    // Warden: per-NPC damage controls { playerId, amount }
+    const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number }>>({}); 
 
     useEffect(() => {
         const unsub = subscribeToRoom(roomId, (data) => setRoomData(data));
@@ -52,6 +54,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const encounter = roomData?.encounter;
     const tokens = encounter?.tokens || {};
     const npcs = encounter?.npcs || {};
+
+    // Whose turn is it?
+    const currentTurnId = encounter?.status === 'active' ? encounter.turnOrder?.[encounter.currentTurnIndex] : null;
+    const isMyTurn = !isWarden && !!playerId && currentTurnId === playerId;
 
     const activeTokenId = isWarden ? selectedTokenId : playerId;
     const activeToken = activeTokenId ? tokens[activeTokenId] : null;
@@ -64,8 +70,15 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         return Math.max(...weapons.map(w => w.range));
     };
 
+    const handleEndTurn = () => {
+        if (!encounter) return;
+        nextTurn(roomId, encounter);
+    };
+
     const handleCellClick = (x: number, y: number) => {
         if (!isWarden) {
+            // Players can only move on their own turn
+            if (!isMyTurn) return;
             const myToken = Object.entries(tokens).find(([id]) => id === playerId);
             if (myToken) {
                 const dist = Math.max(Math.abs(myToken[1].x - x), Math.abs(myToken[1].y - y));
@@ -79,7 +92,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             }
             return;
         }
-        // Warden: move selected token
+        // Warden: move selected token freely
         if (selectedTokenId) {
             const color = tokens[selectedTokenId]?.color || 'bg-red-500';
             updateTokenPosition(roomId, selectedTokenId, x, y, color);
@@ -151,6 +164,30 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
     };
 
+    const handleNpcAttackPlayer = (npcId: string) => {
+        const ctrl = npcDmgControls[npcId];
+        if (!ctrl?.playerId || ctrl.amount <= 0) return;
+        const npc = npcs[npcId];
+        const target = roomData?.players?.[ctrl.playerId];
+        if (!target) return;
+
+        // Deduct HP from player
+        const currentHp = target.vitals?.health?.current ?? 0;
+        const newHp = Math.max(0, currentHp - ctrl.amount);
+        updatePlayerNested(roomId, ctrl.playerId, 'vitals/health/current', newHp);
+
+        pushLog(roomId, {
+            timestamp: Date.now(),
+            playerName: npc?.name || 'NPC',
+            playerId: ctrl.playerId,
+            statName: `ATAQUE DE ${(npc?.name || 'NPC').toUpperCase()} → ${target.name.toUpperCase()}`,
+            statValue: ctrl.amount,
+            roll: 0,
+            result: 'Warden Damage',
+            customMessage: `Dano: ${ctrl.amount} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}`,
+        });
+    };
+
     if (!roomData) return <div className="text-emerald-500 font-mono p-4 animate-pulse">Carregando Malha Tática...</div>;
 
     return (
@@ -183,9 +220,9 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                     <div className="flex items-center gap-2 p-2">
                                         <button
                                             onClick={() => setSelectedTokenId(prev => prev === npc.id ? null : npc.id)}
-                                            className={`flex-1 text-left text-xs font-bold uppercase tracking-wide transition-colors ${isSelected ? 'text-white' : 'text-red-400'}`}
+                                            className={`flex-1 text-left text-xs font-bold uppercase tracking-wide transition-colors flex items-center gap-1.5 ${isSelected ? 'text-white' : 'text-red-400'}`}
                                         >
-                                            <span className="text-sm">{npc.color === 'bg-red-500' ? '🔴' : npc.color === 'bg-purple-500' ? '🟣' : npc.color === 'bg-orange-500' ? '🟠' : npc.color === 'bg-yellow-400' ? '🟡' : npc.color === 'bg-cyan-400' ? '🔵' : '🔴'}</span>{" "}
+                                            <span className="text-base">{npc.isDead ? '💀' : (npc.icon || '👾')}</span>
                                             {npc.name}
                                         </button>
                                         {token && (
@@ -218,9 +255,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                         </div>
                                     </div>
 
-                                    {/* Expanded: attacks + direct HP input */}
+                                    {/* Expanded: attacks + direct HP input + attack player */}
                                     {isExpanded && (
-                                        <div className="px-2 pb-2 border-t border-red-900/30 pt-2 flex flex-col gap-1">
+                                        <div className="px-2 pb-2 border-t border-red-900/30 pt-2 flex flex-col gap-2">
+                                            {/* Direct HP */}
                                             <div className="flex items-center gap-1">
                                                 <span className="text-[10px] text-red-500/70 uppercase">HP Direto:</span>
                                                 <input
@@ -231,9 +269,45 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                 />
                                                 <span className="text-[10px] text-zinc-500">/ {npc.maxHp}</span>
                                             </div>
+
+                                            {/* Attack player panel */}
+                                            {!npc.isDead && roomData?.players && Object.keys(roomData.players).length > 0 && (
+                                                <div className="bg-red-950/20 border border-red-900/30 p-2 flex flex-col gap-1.5">
+                                                    <span className="text-[10px] text-red-400 font-bold uppercase flex items-center gap-1">
+                                                        <Swords size={10}/> Atacar Jogador
+                                                    </span>
+                                                    <div className="flex gap-1 flex-wrap">
+                                                        <select
+                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] outline-none font-mono"
+                                                            value={npcDmgControls[npc.id]?.playerId || ''}
+                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...( prev[npc.id] || { amount: 5 }), playerId: e.target.value } }))}
+                                                        >
+                                                            <option value="">-- Alvo --</option>
+                                                            {Object.values(roomData.players).map(p => (
+                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <input
+                                                            type="number" min={1}
+                                                            className="w-12 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] text-center outline-none font-mono"
+                                                            value={npcDmgControls[npc.id]?.amount ?? 5}
+                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '' }), amount: Number(e.target.value) } }))}
+                                                        />
+                                                        <button
+                                                            onClick={() => handleNpcAttackPlayer(npc.id)}
+                                                            disabled={!npcDmgControls[npc.id]?.playerId}
+                                                            className="bg-red-900 hover:bg-red-700 text-red-100 px-2 py-1 text-[10px] font-bold uppercase border border-red-700 disabled:opacity-30 transition-colors"
+                                                        >
+                                                            DMG
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* NPC defined attacks list (info only) */}
                                             {npc.attacks && npc.attacks.length > 0 && (
-                                                <div className="mt-1">
-                                                    <span className="text-[10px] text-red-500/70 uppercase font-bold block mb-1">Ataques:</span>
+                                                <div>
+                                                    <span className="text-[10px] text-red-500/70 uppercase font-bold block mb-1">Ataques definidos:</span>
                                                     {npc.attacks.map((atk, i) => (
                                                         <div key={i} className="flex items-center justify-between bg-red-950/20 border border-red-900/20 px-2 py-1 rounded mb-0.5">
                                                             <span className="text-[10px] text-red-300 font-bold uppercase">{atk.name}</span>
@@ -242,9 +316,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                     ))}
                                                 </div>
                                             )}
+
                                             {/* MP display */}
                                             {token && (
-                                                <div className="text-[10px] text-zinc-500 mt-1">
+                                                <div className="text-[10px] text-zinc-500">
                                                     Move: {token.movementPoints.current}/{token.movementPoints.max}
                                                 </div>
                                             )}
@@ -359,7 +434,64 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             )}
 
             {/* GRID AREA */}
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center relative scanline-overlay bg-black">
+            <div className="flex-1 overflow-auto flex flex-col relative">
+
+                {/* ── TURN ORDER HUD ── */}
+                {encounter?.status === 'active' && encounter.turnOrder && encounter.turnOrder.length > 0 && (
+                    <div className="shrink-0 bg-zinc-950/95 border-b border-emerald-900/40 flex items-center gap-2 px-3 py-1.5 overflow-x-auto z-20">
+                        {/* Turn queue */}
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            {encounter.turnOrder.map((id, idx) => {
+                                const isActive = idx === encounter.currentTurnIndex;
+                                const isNpc = id.startsWith('npc_');
+                                const npcEntry = npcs[id];
+                                const playerEntry = roomData?.players?.[id];
+                                const label = isNpc ? (npcEntry?.name || 'NPC') : (playerEntry?.name || id);
+                                const icon = isNpc ? (npcEntry?.isDead ? '💀' : (npcEntry?.icon || '👾')) : null;
+                                const isMeTurn = !isWarden && id === playerId;
+
+                                return (
+                                    <div
+                                        key={id}
+                                        className={`flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide shrink-0 border transition-all ${
+                                            isActive
+                                                ? (isMeTurn
+                                                    ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_12px_rgba(59,130,246,0.6)] animate-pulse'
+                                                    : 'bg-amber-700 border-amber-400 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)]')
+                                                : (isNpc
+                                                    ? 'bg-zinc-900 border-red-900/30 text-red-500/60'
+                                                    : 'bg-zinc-900 border-emerald-900/30 text-emerald-700')
+                                        }`}
+                                    >
+                                        {isNpc ? <span>{icon}</span> : <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shrink-0" />}
+                                        <span className="max-w-[70px] truncate">{label}</span>
+                                        {isActive && <span className="text-[8px] opacity-80">▶</span>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* End / Force turn button */}
+                        {encounter.status === 'active' && (
+                            (isMyTurn || isWarden) && (
+                                <button
+                                    onClick={handleEndTurn}
+                                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                                        isMyTurn
+                                            ? 'bg-blue-700 hover:bg-blue-600 border-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.4)]'
+                                            : 'bg-amber-900/50 hover:bg-amber-800 border-amber-700 text-amber-300'
+                                    }`}
+                                >
+                                    <SkipForward size={12} />
+                                    {isMyTurn ? 'ENCERRAR TURNO' : 'PRÓXIMO TURNO'}
+                                </button>
+                            )
+                        )}
+                    </div>
+                )}
+
+                {/* Grid canvas */}
+                <div className="flex-1 overflow-auto p-4 flex items-center justify-center relative scanline-overlay bg-black">
                 <div
                     className="grid bg-zinc-950/50 border-2 border-emerald-900/50 relative shadow-[0_0_50px_rgba(16,185,129,0.1)] mx-auto my-auto"
                     style={{
@@ -376,7 +508,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         let isMovable = false;
                         let isAttackable = false;
 
-                        if (activeToken) {
+                        // Only show movement range when it's the player's own turn (or warden)
+                        const canHighlight = isWarden || isMyTurn;
+
+                        if (activeToken && canHighlight) {
                             const dist = Math.max(Math.abs(activeToken.x - x), Math.abs(activeToken.y - y));
                             if (dist > 0 && dist <= activeToken.movementPoints.current) isMovable = true;
                             const maxRange = getTokenMaxRange(activeTokenId!);
@@ -474,7 +609,8 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         );
                     })}
                 </div>
-            </div>
+                </div> {/* end grid canvas */}
+            </div> {/* end grid area flex-col */}
         </div>
     );
 }
