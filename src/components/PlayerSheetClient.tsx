@@ -61,6 +61,20 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [itemNotification, setItemNotification] = useState<{ text: string, id: number } | null>(null);
     const [shipData, setShipData] = useState<ShipState | null>(null);
 
+    // Damage Overlay State
+    const [damageOverlay, setDamageOverlay] = useState<{show: boolean, amount: number}>({show: false, amount: 0});
+    const prevHealthRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!character) return;
+        const currentHp = character.vitals?.health?.current;
+        if (prevHealthRef.current !== null && currentHp !== undefined && currentHp < prevHealthRef.current) {
+            setDamageOverlay({ show: true, amount: prevHealthRef.current - currentHp });
+            setTimeout(() => setDamageOverlay({ show: false, amount: 0 }), 2000);
+        }
+        if (currentHp !== undefined) prevHealthRef.current = currentHp;
+    }, [character?.vitals?.health?.current]);
+
     // Track other players in the room
     const [activePlayers, setActivePlayers] = useState<Array<{ id: string; name: string; characterClass?: string; avatarUrl?: string; hp: number; maxHp: number; stress: number; wounds: number }>>([]);
 
@@ -586,6 +600,17 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 </>
             )}
 
+            {/* DAMAGE OVERLAY */}
+            {damageOverlay.show && (
+                <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center">
+                    <div className="absolute inset-0 bg-red-900/40 mix-blend-multiply animate-pulse" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_50%,rgba(220,38,38,0.8)_100%)]" />
+                    <div className="text-red-500 text-6xl md:text-8xl font-black uppercase tracking-widest z-10 font-mono drop-shadow-[0_0_20px_rgba(220,38,38,1)] animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300">
+                        -{damageOverlay.amount} HP
+                    </div>
+                </div>
+            )}
+
             {/* FULLSCREEN IMAGE MODAL (Diretor's Slideshow) */}
             {activeImage && (
                 <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl animate-in zoom-in-95 duration-500">
@@ -1081,6 +1106,10 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                     </div>
                                                     <button
                                                         onClick={() => {
+                                                            if (isEncounterActive && !isMyTurn) {
+                                                                alert('Aguarde o seu turno para atacar.');
+                                                                return;
+                                                            }
                                                             if (!character.selectedTargetId || !targetNpc) {
                                                                 alert('Selecione um alvo primeiro.');
                                                                 return;

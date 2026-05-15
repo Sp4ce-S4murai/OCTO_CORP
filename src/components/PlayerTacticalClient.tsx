@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Swords, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { subscribeToPlayer, subscribeToRoom, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested, updateNpcHp } from "@/lib/database";
@@ -41,6 +41,20 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
     const [attackFeedback, setAttackFeedback] = useState<AttackFeedback | null>(null);
     const [showDice, setShowDice] = useState(false);
 
+    // Damage Overlay State
+    const [damageOverlay, setDamageOverlay] = useState<{show: boolean, amount: number}>({show: false, amount: 0});
+    const prevHealthRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!character) return;
+        const currentHp = character.vitals?.health?.current;
+        if (prevHealthRef.current !== null && currentHp !== undefined && currentHp < prevHealthRef.current) {
+            setDamageOverlay({ show: true, amount: prevHealthRef.current - currentHp });
+            setTimeout(() => setDamageOverlay({ show: false, amount: 0 }), 2000);
+        }
+        if (currentHp !== undefined) prevHealthRef.current = currentHp;
+    }, [character?.vitals?.health?.current]);
+
     useEffect(() => {
         const unsub1 = subscribeToPlayer(roomId, playerId, (data) => {
             if (data) {
@@ -57,6 +71,16 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
 
     const handleAttack = (weapon: Weapon) => {
         if (!character || !roomData) return;
+
+        const encounter = roomData.encounter;
+        if (encounter?.isActive) {
+            const isMyTurn = encounter.status === 'active' && encounter.turnOrder[encounter.currentTurnIndex] === playerId;
+            if (!isMyTurn) {
+                setAttackFeedback({ weaponName: weapon.name, result: "Aguarde seu Turno", detail: "Você só pode atacar no seu turno de combate.", success: false });
+                setTimeout(() => setAttackFeedback(null), 3000);
+                return;
+            }
+        }
 
         const targetId = character.selectedTargetId;
         if (!targetId) {
@@ -296,6 +320,17 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                     )}
                 </aside>
             </div>
+
+            {/* DAMAGE OVERLAY */}
+            {damageOverlay.show && (
+                <div className="fixed inset-0 z-[400] pointer-events-none flex items-center justify-center">
+                    <div className="absolute inset-0 bg-red-900/40 mix-blend-multiply animate-pulse" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_50%,rgba(220,38,38,0.8)_100%)]" />
+                    <div className="text-red-500 text-6xl md:text-8xl font-black uppercase tracking-widest z-10 font-mono drop-shadow-[0_0_20px_rgba(220,38,38,1)] animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300">
+                        -{damageOverlay.amount} HP
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

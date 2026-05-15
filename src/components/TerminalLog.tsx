@@ -159,6 +159,11 @@ export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, 
                                     )}{' '}
                                     <span className="text-emerald-700">rolando</span> <span className="font-bold text-zinc-300">{log.roll.toString().padStart(isPanic ? 1 : 2, '0')}</span>{' '}
                                     {'=>'} <span className={`uppercase ${getResultColor(log.result)}`}>{log.result}</span>
+                                    {log.customMessage && (
+                                        <div className="text-emerald-500/70 italic ml-4 text-[10px] mt-1 border-l border-emerald-900/50 pl-2">
+                                            {log.customMessage}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
