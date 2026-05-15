@@ -1,6 +1,6 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
-import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon } from "../types/character";
+import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
 import { CombatState, Token } from "../types/combat";
 
 
@@ -248,7 +248,7 @@ export const endEncounter = async (roomId: string) => {
 
 export const addNPCToEncounter = async (
     roomId: string, 
-    npcData: { name: string; initiative: number; icon: string; color: string }
+    npcData: { name: string; initiative: number; icon?: string; color: string; hp: number; maxHp: number; movementMax?: number; attacks?: NpcAttack[] }
 ) => {
     const npcId = `npc_${crypto.randomUUID()}`;
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
@@ -258,15 +258,28 @@ export const addNPCToEncounter = async (
     const encounter = snapshot.val() as EncounterState;
     if (!encounter) return;
 
+    const movMax = npcData.movementMax || 6;
+
     const updates: any = {};
-    updates[`npcs/${npcId}`] = { id: npcId, name: npcData.name };
+    const npcRecord: NpcData = {
+        id: npcId,
+        name: npcData.name,
+        hp: npcData.hp,
+        maxHp: npcData.maxHp,
+        color: npcData.color,
+        icon: npcData.icon || '👾',
+        movementMax: movMax,
+        isDead: false,
+        attacks: npcData.attacks || [],
+    };
+    updates[`npcs/${npcId}`] = npcRecord;
     updates[`initiatives/${npcId}`] = npcData.initiative;
     updates[`tokens/${npcId}`] = {
         id: npcId,
         x: 0,
         y: 0,
         color: npcData.color,
-        movementPoints: { current: 6, max: 6 } // Default 6
+        movementPoints: { current: movMax, max: movMax }
     };
     
 
@@ -467,18 +480,20 @@ export const deductTokenMovement = async (roomId: string, tokenId: string, dista
 };
 
 export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
-    if (tokenId.startsWith('npc_')) {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+
+    // If it's an NPC token AND it's registered in encounter.npcs, do full NPC removal
+    if (tokenId.startsWith('npc_') && encounter?.npcs?.[tokenId]) {
         await removeNPCFromEncounter(roomId, tokenId);
         return;
     }
 
-    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
-    const snapshot = await get(encPath);
-    const encounter = snapshot.val() as EncounterState;
-    
+    // Otherwise (orphan NPC token or player token) — just remove the token entry
     const updates: any = {};
     updates[`tokens/${tokenId}`] = null;
-    
+
     if (encounter?.turnOrder) {
         const newOrder = encounter.turnOrder.filter(id => id !== tokenId);
         updates[`turnOrder`] = newOrder;
@@ -486,7 +501,7 @@ export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
         if (newIndex >= newOrder.length) newIndex = 0;
         updates[`currentTurnIndex`] = newIndex;
     }
-    
+
     await update(encPath, updates);
 };
 
@@ -510,3 +525,52 @@ export const deleteGlobalItem = async (roomId: string, itemId: string) => {
     const itemPath = ref(database, `${roomPath(roomId)}/globalInventory/${itemId}`);
     await remove(itemPath);
 };
+
+// --- NPC HP MANAGEMENT ---
+
+export const updateNpcData = async (roomId: string, npcId: string, data: Partial<NpcData>) => {
+    const npcRef = ref(database, `${roomPath(roomId)}/encounter/npcs/${npcId}`);
+    await update(npcRef, data);
+};
+
+export const killNpc = async (roomId: string, npcId: string) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const encounter = snapshot.val() as EncounterState;
+    if (!encounter) return;
+
+    const updates: Record<string, unknown> = {};
+    updates[`npcs/${npcId}/hp`] = 0;
+    updates[`npcs/${npcId}/isDead`] = true;
+
+    // Remove from turn order
+    if (encounter.turnOrder) {
+        const newOrder = encounter.turnOrder.filter((id: string) => id !== npcId);
+        updates['turnOrder'] = newOrder;
+
+        if (encounter.status === 'active') {
+            const currentActorId = encounter.turnOrder[encounter.currentTurnIndex];
+            if (currentActorId === npcId) {
+                // Was the active turn — advance to next
+                const nextIndex = encounter.currentTurnIndex < newOrder.length ? encounter.currentTurnIndex : 0;
+                updates['currentTurnIndex'] = nextIndex;
+            } else {
+                const newCurrentIndex = newOrder.indexOf(currentActorId);
+                updates['currentTurnIndex'] = newCurrentIndex >= 0 ? newCurrentIndex : 0;
+            }
+        }
+    }
+
+    await update(encPath, updates);
+};
+
+export const updateNpcHp = async (roomId: string, npcId: string, newHp: number) => {
+    if (newHp <= 0) {
+        // Trigger full kill sequence (isDead flag + turn order cleanup)
+        await killNpc(roomId, npcId);
+        return;
+    }
+    const npcRef = ref(database, `${roomPath(roomId)}/encounter/npcs/${npcId}/hp`);
+    await set(npcRef, newHp);
+};
+

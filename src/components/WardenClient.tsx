@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory } from "@/lib/database";
-import { RoomData, CharacterSheet, Consequence, Item, Weapon } from "@/types/character";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc } from "@/lib/database";
+import { RoomData, CharacterSheet, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS } from "@/lib/itemsDictionary";
-import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package } from "lucide-react";
+import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
@@ -39,8 +39,16 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         name: "",
         initiative: 10,
         icon: "👾",
-        color: "text-red-500"
+        color: "text-red-500",
+        hp: 20,
+        maxHp: 20,
+        movementMax: 6,
+        attacks: [] as NpcAttack[],
     });
+    const [newNpcAttack, setNewNpcAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
+    // Per-NPC damage controls: npcId -> { playerId, amount }
+    const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number }>>({});
+    const [expandedNpcId, setExpandedNpcId] = useState<string | null>(null);
 
     const [selectedPlayerToGive, setSelectedPlayerToGive] = useState<string>("");
     const [selectedItemToGive, setSelectedItemToGive] = useState<string>("");
@@ -676,47 +684,191 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                     </div>
                 )}
 
+                {/* NPC MANAGEMENT PANEL — only visible when encounter is active */}
                 {roomData?.encounter?.isActive && (
-                    <div className="border border-red-900/50 bg-red-950/20 p-4 mt-2">
-                        <h3 className="text-sm text-red-500 mb-2 uppercase font-bold tracking-widest">Adicionar NPC / Ameaça</h3>
-                        <div className="flex flex-wrap gap-2 items-center">
-                            <input 
-                                type="text" 
-                                placeholder="Nome do NPC"
-                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-40"
-                                value={newNpc.name}
-                                onChange={e => setNewNpc(prev => ({...prev, name: e.target.value}))}
-                            />
-                            <label className="text-xs text-red-500/70">INIC:</label>
-                            <input 
-                                type="number" 
-                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-16"
-                                value={newNpc.initiative}
-                                onChange={e => setNewNpc(prev => ({...prev, initiative: parseInt(e.target.value)||0}))}
-                            />
+                    <div className="border border-red-900/50 bg-red-950/20 p-4 mt-2 flex flex-col gap-4">
+                        <h3 className="text-sm text-red-500 mb-1 uppercase font-bold tracking-widest flex items-center gap-2"><Skull size={14}/> GESTÃO DE AMEAÇAS</h3>
 
-                            <select 
-                                className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none"
-                                value={newNpc.icon}
-                                onChange={e => setNewNpc(prev => ({...prev, icon: e.target.value}))}
-                            >
-                                <option value="👾">👾 Alien</option>
-                                <option value="💀">💀 Caveira</option>
-                                <option value="🤖">🤖 Bot</option>
-                                <option value="🕷️">🕷️ Aranha</option>
-                                <option value="👤">👤 Silhueta</option>
-                            </select>
-                            <button 
-                                onClick={() => {
-                                    if(newNpc.name.trim()) {
-                                        addNPCToEncounter(roomId, newNpc);
-                                        setNewNpc({name: "", initiative: 10, icon: "👾", color: "text-red-500"});
-                                    }
-                                }}
-                                className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800"
-                            >
-                                INSERIR
-                            </button>
+                        {/* Active NPCs list */}
+                        {Object.values(roomData.encounter?.npcs || {}).length > 0 && (
+                            <div className="flex flex-col gap-2">
+                                {Object.values(roomData.encounter?.npcs || {}).map((npc: NpcData) => {
+                                    const hpPct = npc.maxHp > 0 ? (npc.hp / npc.maxHp) * 100 : 0;
+                                    const hpColor = hpPct > 50 ? 'bg-emerald-500' : hpPct > 25 ? 'bg-yellow-500' : 'bg-red-500';
+                                    const isExpanded = expandedNpcId === npc.id;
+                                    const dmgCtrl = npcDmgControls[npc.id] || { playerId: '', amount: 5 };
+
+                                    return (
+                                        <div key={npc.id} className={`border ${npc.isDead ? 'border-zinc-800 bg-zinc-900/30 opacity-60' : 'border-red-900/50 bg-zinc-950'} rounded-sm`}>
+                                            {/* Header row */}
+                                            <div className="flex items-center gap-2 p-2">
+                                                <span className="text-lg shrink-0">{npc.isDead ? '💀' : (npc.icon || '👾')}</span>
+                                                <span className={`flex-1 text-xs font-bold uppercase tracking-wide ${npc.isDead ? 'text-zinc-500 line-through' : 'text-red-400'}`}>{npc.name}</span>
+                                                <span className="text-[10px] font-mono text-zinc-500">{npc.hp}/{npc.maxHp} HP</span>
+                                                {!npc.isDead && (
+                                                    <button
+                                                        onClick={() => setExpandedNpcId(prev => prev === npc.id ? null : npc.id)}
+                                                        className="text-red-700 hover:text-red-400 transition-colors px-1"
+                                                        title="Expandir controles"
+                                                    >
+                                                        {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => { removeNPCFromEncounter(roomId, npc.id); setExpandedNpcId(null); }}
+                                                    className="text-red-700/50 hover:text-red-400 transition-colors p-0.5"
+                                                    title="Remover do combate"
+                                                >
+                                                    <X size={12}/>
+                                                </button>
+                                            </div>
+
+                                            {/* HP bar */}
+                                            {!npc.isDead && (
+                                                <div className="px-2 pb-1">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <button onClick={() => updateNpcHp(roomId, npc.id, npc.hp - 1)} className="text-red-400 text-xs bg-red-950/50 px-1.5 rounded hover:bg-red-900">-</button>
+                                                        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${hpColor} transition-all duration-300`} style={{ width: `${hpPct}%` }} />
+                                                        </div>
+                                                        <button onClick={() => updateNpcHp(roomId, npc.id, Math.min(npc.maxHp, npc.hp + 1))} className="text-emerald-400 text-xs bg-emerald-950/50 px-1.5 rounded hover:bg-emerald-900">+</button>
+                                                        <input
+                                                            type="number"
+                                                            className="w-10 bg-zinc-900 border border-red-900/50 text-red-300 text-xs text-center outline-none font-mono ml-1"
+                                                            value={npc.hp}
+                                                            onChange={e => updateNpcHp(roomId, npc.id, Number(e.target.value))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Expanded: apply damage to player */}
+                                            {isExpanded && !npc.isDead && (
+                                                <div className="px-2 pb-2 border-t border-red-900/30 pt-2 flex flex-col gap-2">
+                                                    <span className="text-[10px] text-red-400 font-bold uppercase">Aplicar Dano do NPC em Jogador:</span>
+                                                    <div className="flex gap-1 items-center flex-wrap">
+                                                        <select
+                                                            className="flex-1 bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs outline-none font-mono"
+                                                            value={dmgCtrl.playerId}
+                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...dmgCtrl, playerId: e.target.value } }))}
+                                                        >
+                                                            <option value="">-- Alvo --</option>
+                                                            {orderedPlayers.map((p: CharacterSheet) => (
+                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            className="w-14 bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs text-center outline-none font-mono"
+                                                            value={dmgCtrl.amount}
+                                                            onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...dmgCtrl, amount: Number(e.target.value) } }))}
+                                                        />
+                                                        <button
+                                                            disabled={!dmgCtrl.playerId || dmgCtrl.amount <= 0}
+                                                            onClick={() => {
+                                                                const target = roomData?.players?.[dmgCtrl.playerId];
+                                                                if (!target) return;
+                                                                handleDamage(dmgCtrl.playerId, dmgCtrl.amount);
+                                                                pushLog(roomId, {
+                                                                    timestamp: Date.now(),
+                                                                    playerName: npc.name,
+                                                                    playerId: dmgCtrl.playerId,
+                                                                    statName: `ATAQUE DE ${npc.name.toUpperCase()} EM ${target.name.toUpperCase()}`,
+                                                                    statValue: dmgCtrl.amount,
+                                                                    roll: 0,
+                                                                    result: 'Warden Damage'
+                                                                });
+                                                            }}
+                                                            className="bg-red-900 hover:bg-red-800 text-red-100 px-2 py-1 text-xs font-bold uppercase border border-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                                        >
+                                                            <Zap size={10}/> DAR DANO
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Spawn NPC form */}
+                        <div className="border-t border-red-900/30 pt-3">
+                            <span className="text-[10px] text-red-500/70 uppercase font-bold">Nova Ameaça</span>
+                            <div className="flex flex-wrap gap-2 items-end mt-2">
+                                <input
+                                    type="text"
+                                    placeholder="Nome do NPC"
+                                    className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-36"
+                                    value={newNpc.name}
+                                    onChange={e => setNewNpc(prev => ({...prev, name: e.target.value}))}
+                                />
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[10px] text-red-500/70 uppercase">INIC</label>
+                                    <input
+                                        type="number"
+                                        className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
+                                        value={newNpc.initiative}
+                                        onChange={e => setNewNpc(prev => ({...prev, initiative: parseInt(e.target.value)||0}))}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[10px] text-red-500/70 uppercase">HP</label>
+                                    <input
+                                        type="number"
+                                        className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
+                                        value={newNpc.hp}
+                                        onChange={e => setNewNpc(prev => ({...prev, hp: parseInt(e.target.value)||0}))}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[10px] text-red-500/70 uppercase">MOVE</label>
+                                    <input
+                                        type="number"
+                                        className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
+                                        value={newNpc.movementMax}
+                                        onChange={e => setNewNpc(prev => ({...prev, movementMax: parseInt(e.target.value)||6}))}
+                                    />
+                                </div>
+                                {/* Icon selector */}
+                                <div className="flex flex-col gap-0.5">
+                                    <label className="text-[10px] text-red-500/70 uppercase">Ícone</label>
+                                    <div className="flex gap-1">
+                                        {['👾','💀','🤖','🕷️','👤','🐙','🦂','🧹','👹','🐍'].map(icon => (
+                                            <button
+                                                key={icon}
+                                                onClick={() => setNewNpc(prev => ({...prev, icon}))}
+                                                className={`text-base border rounded transition-all ${
+                                                    newNpc.icon === icon ? 'border-red-400 bg-red-950/50 scale-110' : 'border-transparent hover:border-red-800'
+                                                }`}
+                                            >
+                                                {icon}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        if(newNpc.name.trim()) {
+                                            addNPCToEncounter(roomId, {
+                                                name: newNpc.name,
+                                                initiative: newNpc.initiative,
+                                                icon: newNpc.icon,
+                                                color: 'bg-red-500',
+                                                hp: newNpc.hp,
+                                                maxHp: newNpc.hp,
+                                                movementMax: newNpc.movementMax,
+                                                attacks: [],
+                                            });
+                                            setNewNpc({ name: '', initiative: 10, icon: '👾', color: 'text-red-500', hp: 20, maxHp: 20, movementMax: 6, attacks: [] });
+                                        }
+                                    }}
+                                    className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800 flex items-center gap-1"
+                                >
+                                    <Plus size={12}/> INSERIR
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

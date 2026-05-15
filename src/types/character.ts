@@ -101,6 +101,24 @@ export interface EnvironmentState {
     radiation: string; // e.g. "Seguro", "Letal"
 }
 
+export interface NpcAttack {
+    name: string;
+    damage: string; // e.g. "2d6"
+    range: number;  // in grid squares
+}
+
+export interface NpcData {
+    id: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    color?: string;
+    icon?: string;         // Emoji icon displayed on the grid token
+    movementMax?: number;  // Max movement points (default 6)
+    isDead?: boolean;      // True when HP reached 0 — token becomes a corpse
+    attacks?: NpcAttack[];
+}
+
 export interface GridToken {
     id: string;
     x: number;
@@ -116,7 +134,7 @@ export interface EncounterState {
     turnOrder: string[]; // ordered list of playerIds
     currentTurnIndex: number;
     round: number;
-    npcs?: Record<string, { id: string, name: string }>; // Warden's custom NPCs
+    npcs?: Record<string, NpcData>; // Warden's custom NPCs
     tokens?: Record<string, GridToken>; // Tactical Grid positions
 }
 

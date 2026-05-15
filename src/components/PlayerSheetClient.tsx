@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog } from "@/lib/database";
-import { CharacterSheet, EncounterState } from "@/types/character";
+import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog, updateNpcHp } from "@/lib/database";
+import { CharacterSheet, EncounterState, NpcData, Weapon } from "@/types/character";
 import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X, Package } from "lucide-react";
 import Link from "next/link";
 
@@ -987,7 +987,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                 <section className="mb-8">
                     <CollapsibleSection title="INVENTÁRIO">
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-4">
+                            {/* ITEM LIST */}
                             {(!character.inventory || character.inventory.length === 0) ? (
                                 <div className="text-emerald-700/50 italic text-sm p-4 bg-emerald-950/10 border border-emerald-900/30">Sem itens registrados.</div>
                             ) : (
@@ -1006,52 +1007,151 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                     </span>
                                                 )}
                                             </div>
-                                            {item.type === 'weapon' && (
-                                                <button 
-                                                    onClick={() => {
-                                                        const w = item as any;
-                                                        const targetId = character.selectedTargetId;
-                                                        // 'encounter' is subscribed separately in this component
-                                                        const myToken = encounter?.tokens?.[character.id];
-                                                        const targetToken = targetId ? encounter?.tokens?.[targetId] : null;
-
-                                                        let outOfRange = false;
-                                                        if (targetToken && myToken) {
-                                                            const dist = Math.max(Math.abs(myToken.x - targetToken.x), Math.abs(myToken.y - targetToken.y));
-                                                            if (dist > w.range) {
-                                                                outOfRange = true;
-                                                            }
-                                                        }
-
-                                                        if (outOfRange) {
-                                                            alert(`Ataque Impossível: O alvo está fora do alcance da arma (Distância > ${w.range} casas). Aproxime-se.`);
-                                                            return;
-                                                        }
-
-                                                        const statValue = character.stats[w.baseStat as keyof typeof character.stats] || 0;
-                                                        const totalTarget = statValue + w.bonus;
-                                                        const roll = Math.floor(Math.random() * 100);
-                                                        const success = roll <= totalTarget;
-                                                        import("@/lib/database").then(({ pushLog }) => {
-                                                            pushLog(roomId, {
-                                                                timestamp: Date.now(),
-                                                                playerName: character.name,
-                                                                playerId: character.id,
-                                                                statName: `ATAQUE: ${w.name}${targetId ? ' [NO ALVO]' : ''}`,
-                                                                statValue: totalTarget,
-                                                                roll: roll,
-                                                                result: success ? (roll % 10 === Math.floor(roll / 10) ? 'Critical Success' : 'Success') : (roll % 10 === Math.floor(roll / 10) ? 'Critical Failure' : 'Failure')
-                                                            });
-                                                        });
-                                                    }}
-                                                    disabled={isRoomLocked || isDead}
-                                                    className="bg-red-950/50 hover:bg-red-900 text-red-400 border border-red-800 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 disabled:opacity-50"
-                                                >
-                                                    ATIRAR / ATACAR
-                                                </button>
-                                            )}
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {/* COMBAT PANEL — only during active encounter with weapons */}
+                            {isEncounterActive && encounter?.status === 'active' && !isDead &&
+                             character.inventory?.some(i => i.type === 'weapon') && (
+                                <div className="border border-red-900/50 bg-red-950/10 p-4 flex flex-col gap-3">
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-red-400 flex items-center gap-2">
+                                        <Crosshair size={12}/> PAINEL DE COMBATE
+                                    </h4>
+
+                                    {/* NPC targets */}
+                                    {Object.values(encounter?.npcs || {}).filter((n: NpcData) => !n.isDead && n.hp > 0).length === 0 ? (
+                                        <p className="text-xs text-red-900 italic">Nenhum inimigo visível no setor.</p>
+                                    ) : (
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[10px] text-red-500/70 uppercase font-bold">Selecionar Alvo:</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {Object.values(encounter?.npcs || {}).filter((n: NpcData) => !n.isDead && n.hp > 0).map((npc: NpcData) => {
+                                                    const hpPct = npc.maxHp > 0 ? (npc.hp / npc.maxHp) * 100 : 0;
+                                                    const isSelected = character.selectedTargetId === npc.id;
+                                                    return (
+                                                        <button
+                                                            key={npc.id}
+                                                            onClick={() => updatePlayerNested(roomId, playerId, 'selectedTargetId', isSelected ? null : npc.id)}
+                                                            className={`flex flex-col items-center gap-1 p-2 border text-xs font-bold transition-all ${
+                                                                isSelected
+                                                                    ? 'border-red-400 bg-red-950/60 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                                                                    : 'border-red-900/40 bg-zinc-950 text-red-500 hover:border-red-700'
+                                                            }`}
+                                                        >
+                                                            <span className="text-xl">{npc.icon || '👾'}</span>
+                                                            <span className="uppercase tracking-wide max-w-[80px] truncate">{npc.name}</span>
+                                                            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className={`h-full transition-all ${
+                                                                        hpPct > 50 ? 'bg-emerald-500' : hpPct > 25 ? 'bg-yellow-500' : 'bg-red-500'
+                                                                    }`}
+                                                                    style={{ width: `${hpPct}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-[9px] text-zinc-500 font-mono">{npc.hp}/{npc.maxHp}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Weapon attack buttons */}
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-[10px] text-red-500/70 uppercase font-bold">Atacar com:</span>
+                                        {character.inventory?.filter(i => i.type === 'weapon').map((item, index) => {
+                                            const w = item as Weapon;
+                                            const targetNpc: NpcData | undefined = character.selectedTargetId
+                                                ? (encounter?.npcs || {})[character.selectedTargetId]
+                                                : undefined;
+                                            const myToken = encounter?.tokens?.[character.id];
+                                            const targetToken = character.selectedTargetId ? encounter?.tokens?.[character.selectedTargetId] : null;
+                                            const dist = (myToken && targetToken)
+                                                ? Math.max(Math.abs(myToken.x - targetToken.x), Math.abs(myToken.y - targetToken.y))
+                                                : null;
+                                            const outOfRange = dist !== null && dist > w.range;
+
+                                            return (
+                                                <div key={`${item.id}-${index}`} className="flex items-center justify-between bg-zinc-900/50 border border-red-900/30 p-2 gap-3">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-red-300 font-bold text-xs uppercase">{w.name}</span>
+                                                        <span className="text-[10px] font-mono text-red-500/70">{w.damage} | Alc. {w.range} casas</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (!character.selectedTargetId || !targetNpc) {
+                                                                alert('Selecione um alvo primeiro.');
+                                                                return;
+                                                            }
+                                                            if (outOfRange) {
+                                                                alert(`Fora de alcance! Alvo a ${dist} casas, arma alcança ${w.range}.`);
+                                                                return;
+                                                            }
+                                                            const statValue = character.stats[w.baseStat as keyof typeof character.stats] || 0;
+                                                            const totalTarget = statValue + (w.bonus || 0);
+                                                            const roll = Math.floor(Math.random() * 100);
+                                                            const isCrit = roll % 11 === 0;
+                                                            const success = roll <= totalTarget;
+                                                            const result = success
+                                                                ? (isCrit ? 'Critical Success' : 'Success')
+                                                                : (isCrit ? 'Critical Failure' : 'Failure');
+
+                                                            if (success) {
+                                                                // Apply damage automatically
+                                                                const dmgParts = w.damage.match(/(\d+)d(\d+)(?:\+?(\d+))?/);
+                                                                let totalDmg = 0;
+                                                                if (dmgParts) {
+                                                                    const dice = parseInt(dmgParts[1]);
+                                                                    const sides = parseInt(dmgParts[2]);
+                                                                    const bonus = parseInt(dmgParts[3] || '0');
+                                                                    for (let d = 0; d < dice; d++) totalDmg += Math.ceil(Math.random() * sides);
+                                                                    totalDmg += bonus;
+                                                                } else {
+                                                                    totalDmg = parseInt(w.damage) || 1;
+                                                                }
+                                                                if (isCrit) totalDmg *= 2;
+                                                                const newHp = Math.max(0, targetNpc.hp - totalDmg);
+                                                                updateNpcHp(roomId, targetNpc.id, newHp);
+                                                                pushLog(roomId, {
+                                                                    timestamp: Date.now(),
+                                                                    playerName: character.name,
+                                                                    playerId: character.id,
+                                                                    statName: `ATAQUE: ${w.name} → ${targetNpc.name}${isCrit ? ' [CRÍTICO!]' : ''}`,
+                                                                    statValue: totalTarget,
+                                                                    roll,
+                                                                    result,
+                                                                    customMessage: `Dano: ${totalDmg} | HP restante: ${newHp}/${targetNpc.maxHp}`
+                                                                });
+                                                            } else {
+                                                                pushLog(roomId, {
+                                                                    timestamp: Date.now(),
+                                                                    playerName: character.name,
+                                                                    playerId: character.id,
+                                                                    statName: `ATAQUE: ${w.name} → ${targetNpc.name} [ERROU]`,
+                                                                    statValue: totalTarget,
+                                                                    roll,
+                                                                    result,
+                                                                });
+                                                            }
+                                                        }}
+                                                        disabled={isRoomLocked || isDead || !isMyTurn}
+                                                        className={`text-xs font-bold uppercase tracking-widest px-3 py-2 border transition-colors shrink-0 ${
+                                                            !isMyTurn
+                                                                ? 'opacity-30 cursor-not-allowed border-red-900/30 text-red-900'
+                                                                : outOfRange
+                                                                ? 'border-zinc-700 text-zinc-600 cursor-not-allowed'
+                                                                : 'bg-red-950/50 hover:bg-red-900 text-red-400 border-red-800'
+                                                        } disabled:opacity-40`}
+                                                        title={!isMyTurn ? 'Aguarde seu turno' : outOfRange ? `Fora de alcance (${dist} > ${w.range})` : 'Atacar alvo selecionado'}
+                                                    >
+                                                        {outOfRange ? '⚠ LONGE' : 'ATACAR'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
