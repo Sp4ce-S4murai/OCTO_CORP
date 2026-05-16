@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog, updateNpcHp } from "@/lib/database";
-import { CharacterSheet, EncounterState, NpcData, Weapon } from "@/types/character";
+import { CharacterSheet, EncounterState, NpcData, Weapon, Item } from "@/types/character";
 import { BALANCED_WEAPONS } from "@/lib/itemPresets";
 import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X, Package } from "lucide-react";
 import Link from "next/link";
