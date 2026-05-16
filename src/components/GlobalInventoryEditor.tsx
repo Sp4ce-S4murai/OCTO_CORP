@@ -22,6 +22,7 @@ interface ItemFormData {
     range?: number;
     baseStat?: 'combat' | 'strength' | 'speed';
     bonus?: number;
+    imageUrl?: string;
 }
 
 const EMPTY_FORM: ItemFormData = {
@@ -34,7 +35,8 @@ const EMPTY_FORM: ItemFormData = {
     damage: "",
     range: 1,
     baseStat: "combat",
-    bonus: 0
+    bonus: 0,
+    imageUrl: ""
 };
 
 export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
@@ -71,6 +73,7 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
                 range: Number(formData.range) || 1,
                 baseStat: formData.baseStat || "combat",
                 bonus: Number(formData.bonus) || 0,
+                imageUrl: formData.imageUrl || ""
             }
             : {
                 id: formData.id || `item_${Date.now()}`,
@@ -79,6 +82,7 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
                 type: formData.type,
                 weight: Number(formData.weight) || 0,
                 quantity: Number(formData.quantity) || 1,
+                imageUrl: formData.imageUrl || ""
             };
 
         await addGlobalItem(roomId, finalItem);
@@ -113,8 +117,12 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
                             </select>
                         </label>
                         <label className="flex flex-col col-span-2">
-                            <span className="text-xs text-emerald-600 mb-1">Descrição / Imagem URL</span>
-                            <input type="text" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2" />
+                            <span className="text-xs text-emerald-600 mb-1">Descrição</span>
+                            <textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2 text-sm h-20 outline-none" />
+                        </label>
+                        <label className="flex flex-col col-span-2">
+                            <span className="text-xs text-emerald-600 mb-1">URL da Imagem (Ex: /images/weapons/pistol.png)</span>
+                            <input type="text" value={formData.imageUrl} onChange={e => setFormData({ ...formData, imageUrl: e.target.value })} className="bg-zinc-950 border border-emerald-900/50 text-emerald-300 p-2 text-sm outline-none" />
                         </label>
                         <label className="flex flex-col">
                             <span className="text-xs text-emerald-600 mb-1">Peso</span>
@@ -156,22 +164,29 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {itemsList.map(item => (
-                    <div key={item.id} className="bg-zinc-950 border border-emerald-900/30 p-3 flex flex-col justify-between group hover:border-emerald-500 transition-colors">
-                        <div>
-                            <div className="flex justify-between items-start">
-                                <span className="font-bold text-emerald-400 uppercase text-sm">{item.name}</span>
-                                <span className="text-[10px] text-emerald-700 bg-emerald-950/30 px-1 border border-emerald-900">{item.type}</span>
+                    <div key={item.id} className="bg-zinc-950 border border-emerald-900/30 p-3 flex gap-4 group hover:border-emerald-500 transition-colors relative overflow-hidden">
+                        {item.imageUrl && (
+                            <div className="w-16 h-16 shrink-0 border border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black">
+                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover avatar-filter-normal opacity-70 group-hover:opacity-100 transition-all duration-700" />
                             </div>
-                            <span className="text-xs text-emerald-600/70 block mt-1">{item.description}</span>
-                            {item.type === 'weapon' && (
-                                <div className="text-[10px] text-red-400 mt-2 font-mono uppercase">
-                                    DANO: {(item as Weapon).damage} | ALCANCE: {(item as Weapon).range}
+                        )}
+                        <div className="flex-1 flex flex-col justify-between">
+                            <div>
+                                <div className="flex justify-between items-start">
+                                    <span className="font-bold text-emerald-400 uppercase text-sm">{item.name}</span>
+                                    <span className="text-[10px] text-emerald-700 bg-emerald-950/30 px-1 border border-emerald-900">{item.type}</span>
                                 </div>
-                            )}
-                        </div>
-                        <div className="flex justify-end gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEdit(item)} className="text-blue-500 hover:text-blue-400"><Edit2 size={14} /></button>
-                            <button onClick={() => { if(confirm('Excluir do banco global?')) deleteGlobalItem(roomId, item.id); }} className="text-red-500 hover:text-red-400"><Trash2 size={14} /></button>
+                                <span className="text-[10px] text-emerald-600/70 block mt-1 line-clamp-2">{item.description}</span>
+                                {item.type === 'weapon' && (
+                                    <div className="text-[9px] text-red-400 mt-1 font-mono uppercase">
+                                        {(item as Weapon).damage} | ALC: {(item as Weapon).range} | {(item as Weapon).bonus > 0 ? `+${(item as Weapon).bonus}` : ''}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => handleEdit(item)} className="text-blue-500 hover:text-blue-400"><Edit2 size={12} /></button>
+                                <button onClick={() => { if(confirm('Excluir do banco global?')) deleteGlobalItem(roomId, item.id); }} className="text-red-500 hover:text-red-400"><Trash2 size={12} /></button>
+                            </div>
                         </div>
                     </div>
                 ))}

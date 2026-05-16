@@ -543,9 +543,26 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
             {/* INVENTÁRIO GLOBAL */}
             <section className="bg-zinc-950/80 border border-emerald-900/50 p-6 flex flex-col gap-4">
-                <h2 className="text-xl font-bold tracking-widest text-emerald-500 flex items-center gap-2 uppercase">
-                    <Package size={24} /> INVENTÁRIO GLOBAL E SUPRIMENTOS
-                </h2>
+                <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-bold tracking-widest text-emerald-500 flex items-center gap-2 uppercase">
+                        <Package size={24} /> INVENTÁRIO GLOBAL E SUPRIMENTOS
+                    </h2>
+                    <button
+                        onClick={async () => {
+                            if(confirm("Deseja resetar o Almoxarifado para o novo padrão balanceado? Isso substituirá a lista atual de itens globais.")) {
+                                const { GLOBAL_ITEMS } = await import('@/lib/itemsDictionary');
+                                const { database } from '@/lib/firebase';
+                                const { ref, set } = await import('firebase/database');
+                                const invRef = ref(database, `rooms/${roomId}/globalInventory`);
+                                await set(invRef, GLOBAL_ITEMS);
+                                alert("Almoxarifado resetado com sucesso!");
+                            }
+                        }}
+                        className="text-[10px] font-bold text-red-500/70 border border-red-900/30 px-3 py-1 hover:bg-red-950/30 transition-colors uppercase tracking-widest"
+                    >
+                        ⚠ RESETAR DICIONÁRIO
+                    </button>
+                </div>
                 <div className="flex flex-wrap gap-4 items-end">
                     <div className="flex flex-col gap-1 w-64">
                         <label className="text-xs text-emerald-600 font-bold uppercase">SELECIONAR JOGADOR</label>
@@ -566,8 +583,18 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             </optgroup>
                         </select>
                     </div>
-                    <button 
-                        disabled={!selectedPlayerToGive || !selectedItemToGive}
+
+                    {selectedItemToGive && !selectedItemToGive.startsWith("kit:") && roomData?.globalInventory?.[selectedItemToGive]?.imageUrl && (
+                        <div className="w-10 h-10 border border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black self-end mb-1">
+                            <img 
+                                src={roomData.globalInventory[selectedItemToGive].imageUrl} 
+                                alt="Preview" 
+                                className="w-full h-full object-cover avatar-filter-normal opacity-100" 
+                            />
+                        </div>
+                    )}
+
+                    <button                        disabled={!selectedPlayerToGive || !selectedItemToGive}
                         onClick={() => {
                             let itemsToGive: (Item | Weapon)[] = [];
                             let itemName = "";
