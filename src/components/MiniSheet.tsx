@@ -123,7 +123,6 @@ export function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, 
                                 </div>
                             </div>
                         </div>
-                        {/* FERIDAS */}
                         <div className={`flex justify-between items-center bg-zinc-900/50 p-1 border ${isDead ? 'border-red-900' : 'border-emerald-900'}`}>
                             <span className={`text-[10px] pl-1 ${isDead ? 'text-red-600' : 'text-emerald-600'}`}>FERIDAS</span>
                             <div className="flex items-center text-xs pr-1 flex-1 justify-end">
@@ -134,6 +133,19 @@ export function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, 
                                 )}
                                 <span className={isDead ? 'text-red-800 mx-1' : 'text-emerald-800 mx-1'}>/</span>
                                 <span className={isDead ? 'text-red-700 font-bold' : 'text-emerald-700'}>{character.vitals.wounds.max}</span>
+                            </div>
+                        </div>
+                        {/* ARMADURA */}
+                        <div className="flex justify-between items-center bg-blue-950/20 p-1 border border-blue-900/50">
+                            <span className="text-[10px] pl-1 text-blue-500" title="Armor Points (Threshold)">ARMADURA</span>
+                            <div className="flex items-center text-xs pr-1 flex-1 justify-end">
+                                {readOnly ? (
+                                    <span className="px-2 text-right text-blue-400 font-bold">{character.vitals.armor?.current || 0}</span>
+                                ) : (
+                                    <input type="number" className="w-6 bg-transparent text-right outline-none text-blue-400 focus:bg-blue-900/50 font-bold" value={character.vitals.armor?.current || 0} onChange={(e) => onUpdate?.("vitals/armor/current", Number(e.target.value))} />
+                                )}
+                                <span className="text-blue-800/50 mx-1">/</span>
+                                <span className="text-blue-700/50">{character.vitals.armor?.max || 0}</span>
                             </div>
                         </div>
                         <div className="flex justify-between items-center bg-amber-950/20 p-1 border border-amber-900/50">

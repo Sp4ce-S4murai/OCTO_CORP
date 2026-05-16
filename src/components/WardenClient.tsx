@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
 import { RoomData, CharacterSheet, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
@@ -280,29 +280,15 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         }
     };
 
-    const handleDamage = (playerId: string, damage: number) => {
+    const handleDamage = async (playerId: string, damage: number) => {
         const char = roomData?.players?.[playerId];
         if (!char || damage <= 0) return;
 
-        let newHealth = char.vitals.health.current - damage;
-        let newWounds = char.vitals.wounds.current;
+        const result = await applyDamageToPlayer(roomId, playerId, damage);
 
-        // Overflow calculation
-        while (newHealth <= 0 && newWounds < char.vitals.wounds.max) {
-            newWounds += 1;
-            newHealth += char.vitals.health.max; // Rollover the remainder
-        }
-
-        // Clamp to death state
-        if (newWounds >= char.vitals.wounds.max) {
-            newWounds = char.vitals.wounds.max;
-            newHealth = 0;
-        }
-
-        updatePlayer(roomId, playerId, {
-            "vitals/health/current": newHealth,
-            "vitals/wounds/current": newWounds,
-        } as Record<string, number>);
+        let logMsg = `Dano Bruto: ${damage}`;
+        if (result.armorDestroyed) logMsg += ` | ARMADURA DESTRUÍDA!`;
+        logMsg += ` | HP Restante: ${result.newHealth}/${result.maxHealth}`;
 
         pushLog(roomId, {
             timestamp: getTimestamp(),
@@ -311,7 +297,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             statName: 'DANO DIRETO',
             statValue: damage,
             roll: 0,
-            result: 'Warden Damage'
+            result: result.armorDestroyed ? 'Critical Success' : 'Warden Damage',
+            customMessage: logMsg
         });
     };
 

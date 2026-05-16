@@ -93,6 +93,12 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
         const unsubscribe = subscribeToPlayer(roomId, playerId, (data) => {
             if (data) {
+                if (!data.vitals.armor) {
+                    import("@/lib/database").then(({ updatePlayer }) => {
+                        updatePlayer(roomId, playerId, { "vitals/armor/current": 10, "vitals/armor/max": 10 });
+                    });
+                    data.vitals.armor = { current: 10, max: 10 };
+                }
                 setCharacter(data);
             } else {
                 // Auto-create if not exists based on URL parameter topology constraint
@@ -942,6 +948,15 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                                 <input disabled={isDead} type="number" className={`w-8 bg-transparent text-right outline-none focus:bg-emerald-900/50 ${isDead ? 'text-red-500 font-bold' : 'text-emerald-300'}`} value={character.vitals.wounds.current || 0} onChange={(e) => handleUpdate("vitals/wounds/current", Number(e.target.value))} />
                                                 <span className={isDead ? 'text-red-800 mx-1' : 'text-emerald-800 mx-1'}>/</span>
                                                 <input disabled={isRoomLocked || isDead} type="number" className={`w-8 bg-transparent text-left outline-none focus:bg-emerald-900/50 ${isDead ? 'text-red-700 font-bold' : 'text-emerald-700'}`} value={character.vitals.wounds.max} onChange={(e) => handleUpdate("vitals/wounds/max", Number(e.target.value))} />
+                                            </div>
+                                        </div>
+                                        {/* ARMADURA (AP) */}
+                                        <div className="flex justify-between items-center bg-blue-950/20 p-1 border border-blue-900/50">
+                                            <span className="text-[10px] font-bold tracking-widest pl-1 text-blue-500" title="Armor Points (Threshold)">ARMADURA</span>
+                                            <div className="flex items-center text-xs pr-1 font-mono">
+                                                <input disabled={isRoomLocked || isDead} type="number" className="w-8 bg-transparent text-right outline-none text-blue-400 focus:bg-blue-900/50 font-bold" value={character.vitals.armor?.current || 0} onChange={(e) => handleUpdate("vitals/armor/current", Number(e.target.value))} />
+                                                <span className="text-blue-800/50 mx-1">/</span>
+                                                <input disabled={isRoomLocked || isDead} type="number" className="w-8 bg-transparent text-left outline-none text-blue-700/50 focus:bg-blue-900/50" value={character.vitals.armor?.max || 0} onChange={(e) => handleUpdate("vitals/armor/max", Number(e.target.value))} />
                                             </div>
                                         </div>
                                         {/* STRESS */}

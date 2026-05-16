@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn } from "@/lib/database";
+import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
 import { RoomData, EncounterState, Weapon, NpcAttack } from "@/types/character";
-import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward } from "lucide-react";
+import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
 
 interface TacticalGridProps {
     roomId: string;
@@ -11,7 +11,6 @@ interface TacticalGridProps {
     isWarden?: boolean;
 }
 
-const GRID_SIZE = 20;
 const CELL_SIZE = 40;
 
 const NPC_COLORS = [
@@ -50,6 +49,42 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [expandedNpc, setExpandedNpc] = useState<string | null>(null);
     // Warden: per-NPC damage controls { playerId, amount, attackIndex }
     const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number; attackIndex?: number }>>({}); 
+
+    // Editor Mode State
+    const [isEditorMode, setIsEditorMode] = useState(false);
+    const [editorTool, setEditorTool] = useState<'wall' | 'cover' | 'door' | 'hazard' | 'eraser'>('wall');
+    const [editorColor, setEditorColor] = useState('bg-zinc-700');
+    
+    // Grid settings
+    const [gridSize, setGridSize] = useState(20);
+
+    const handleExportGrid = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(encounter, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `grid_layout_${roomId}.json`);
+        dlAnchorElem.click();
+    };
+
+    const handleImportGrid = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const imported = JSON.parse(e.target?.result as string);
+                if (imported.obstacles || imported.tokens) {
+                    await updateEncounterState(roomId, {
+                        obstacles: imported.obstacles || {},
+                        tokens: imported.tokens || {}
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to parse grid JSON", err);
+            }
+        };
+        reader.readAsText(file);
+    };
 
     useEffect(() => {
         const unsub = subscribeToRoom(roomId, (data) => setRoomData(data));
@@ -113,6 +148,25 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             }
             return;
         }
+
+        if (isEditorMode) {
+            if (editorTool === 'eraser') {
+                // Find obstacle at this pos
+                const obsId = Object.keys(encounter?.obstacles || {}).find(k => encounter!.obstacles![k].x === x && encounter!.obstacles![k].y === y);
+                if (obsId) removeGridObstacle(roomId, obsId);
+            } else {
+                addGridObstacle(roomId, {
+                    id: `obs_${x}_${y}`,
+                    x, y,
+                    type: editorTool,
+                    color: editorColor,
+                    isBlocking: editorTool !== 'hazard', // hazards don't block movement
+                    isOpaque: editorTool === 'wall' || editorTool === 'door'
+                });
+            }
+            return;
+        }
+
         // Warden: move selected token freely
         if (selectedTokenId) {
             const color = tokens[selectedTokenId]?.color || 'bg-red-500';
@@ -266,15 +320,17 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             if (totalDmg <= 0) return;
         }
 
-        // Deduct HP from player
-        const currentHp = target.vitals?.health?.current ?? 0;
-        const newHp = Math.max(0, currentHp - totalDmg);
-        updatePlayerNested(roomId, ctrl.playerId, 'vitals/health/current', newHp);
+        // Deduct HP from player using Central Function
+        const result = await applyDamageToPlayer(roomId, ctrl.playerId, totalDmg);
 
-        const msg = `Dano: ${totalDmg} ${dmgDetail} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}${ctrl.attackIndex !== undefined ? ` | Rolou ${toHitRoll} vs CBT ${combatStat}` : ''}`;
+        let logMsg = `Dano: ${totalDmg} ${dmgDetail}`;
+        if (result.armorDestroyed) logMsg += ` | ARMADURA DESTRUÍDA!`;
+        logMsg += ` | HP Restante: ${result.newHealth}/${result.maxHealth}`;
+        if (ctrl.attackIndex !== undefined) logMsg += ` | Rolou ${toHitRoll} vs CBT ${combatStat}`;
         
         let resultType: any = 'Warden Damage';
         if (isCriticalHit) resultType = 'Critical Success';
+        if (result.armorDestroyed) resultType = 'Critical Success';
 
         pushLog(roomId, {
             timestamp: Date.now(),
@@ -284,7 +340,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             statValue: totalDmg,
             roll: toHitRoll,
             result: resultType,
-            customMessage: msg,
+            customMessage: logMsg,
         });
 
         // Broadcast popup
@@ -297,7 +353,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         target: target.name.toUpperCase(),
                         weapon: attackName,
                         damage: totalDmg,
-                        message: msg,
+                        message: logMsg,
                         success: true
                     }
                 });
@@ -635,6 +691,44 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             {/* GRID AREA */}
             <div className="flex-1 overflow-auto flex flex-col relative">
 
+                {/* --- EDITOR HUD --- */}
+                {isWarden && (
+                    <div className="shrink-0 bg-zinc-950 border-b border-emerald-900/50 p-2 flex items-center justify-between z-30">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setIsEditorMode(!isEditorMode)} className={`flex items-center gap-1 px-3 py-1 text-xs font-bold border transition-colors ${isEditorMode ? 'bg-amber-600 text-white border-amber-500' : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white'}`}>
+                                <Edit3 size={14} /> MODO EDITOR
+                            </button>
+                            {isEditorMode && (
+                                <div className="flex items-center gap-2 border-l border-zinc-800 pl-4">
+                                    <button onClick={() => setEditorTool('wall')} className={`p-1.5 border ${editorTool === 'wall' ? 'bg-emerald-900/50 border-emerald-500 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Parede"><Square size={14} className="fill-current" /></button>
+                                    <button onClick={() => setEditorTool('cover')} className={`p-1.5 border ${editorTool === 'cover' ? 'bg-amber-900/50 border-amber-500 text-amber-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Cobertura (Meia Parede)"><Square size={14} className="fill-current opacity-50" /></button>
+                                    <button onClick={() => setEditorTool('eraser')} className={`p-1.5 border ${editorTool === 'eraser' ? 'bg-red-900/50 border-red-500 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Apagar (Borracha)"><Trash2 size={14} /></button>
+                                    <select value={editorColor} onChange={e => setEditorColor(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-300 p-1 outline-none text-xs ml-2">
+                                        <option value="bg-zinc-700">Cinza</option>
+                                        <option value="bg-red-900">Vermelho</option>
+                                        <option value="bg-amber-900">Amarelo</option>
+                                        <option value="bg-blue-900">Azul</option>
+                                        <option value="bg-green-900">Verde</option>
+                                        <option value="bg-purple-900">Roxo</option>
+                                    </select>
+                                    <div className="flex items-center gap-1 ml-4 text-xs text-zinc-400">
+                                        Tam: <input type="number" value={gridSize} onChange={(e) => setGridSize(Math.max(10, Math.min(100, Number(e.target.value))))} className="w-12 bg-zinc-900 border border-zinc-700 text-center p-1" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleExportGrid} className="flex items-center gap-1 px-2 py-1 text-xs border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-emerald-400" title="Exportar Grid">
+                                <Download size={14} /> EXPORTAR
+                            </button>
+                            <label className="flex items-center gap-1 px-2 py-1 text-xs border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-amber-400 cursor-pointer" title="Importar Grid">
+                                <UploadCloud size={14} /> IMPORTAR
+                                <input type="file" accept=".json" onChange={handleImportGrid} className="hidden" />
+                            </label>
+                        </div>
+                    </div>
+                )}
+
                 {/* ── TURN ORDER HUD ── */}
                 {encounter?.status === 'active' && encounter.turnOrder && encounter.turnOrder.length > 0 && (
                     <div className="shrink-0 bg-zinc-950/95 border-b border-emerald-900/40 flex items-center gap-2 px-3 py-1.5 overflow-x-auto z-20">
@@ -694,18 +788,20 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                 <div
                     className="grid bg-zinc-950/50 border-2 border-emerald-900/50 relative shadow-[0_0_50px_rgba(16,185,129,0.1)] mx-auto my-auto"
                     style={{
-                        gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
-                        gridTemplateRows: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
-                        width: `${GRID_SIZE * CELL_SIZE}px`,
-                        height: `${GRID_SIZE * CELL_SIZE}px`
+                        gridTemplateColumns: `repeat(${gridSize}, ${CELL_SIZE}px)`,
+                        gridTemplateRows: `repeat(${gridSize}, ${CELL_SIZE}px)`,
+                        width: `${gridSize * CELL_SIZE}px`,
+                        height: `${gridSize * CELL_SIZE}px`
                     }}
                 >
                     {/* Cells */}
-                    {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => {
-                        const x = i % GRID_SIZE;
-                        const y = Math.floor(i / GRID_SIZE);
+                    {Array.from({ length: gridSize * gridSize }).map((_, i) => {
+                        const x = i % gridSize;
+                        const y = Math.floor(i / gridSize);
                         let isMovable = false;
                         let isAttackable = false;
+                        const obsId = Object.keys(encounter?.obstacles || {}).find(k => encounter!.obstacles![k].x === x && encounter!.obstacles![k].y === y);
+                        const obs = obsId ? encounter!.obstacles![obsId] : null;
 
                         // Only show movement range when it's the player's own turn (or warden)
                         const canHighlight = isWarden || isMyTurn;

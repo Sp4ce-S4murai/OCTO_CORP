@@ -358,12 +358,82 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
         vitals: {
             health: { current: 10, max: 10 },
             wounds: { current: 0, max: 2 },
-            stress: { current: 2, min: 2 }
+            stress: { current: 2, min: 2 },
+            armor: { current: 10, max: 10 }
         },
         skills: {
             trained: {}, expert: {}, master: {}
         }
     };
+};
+
+// --- COMBAT / DAMAGE RESOLUTION ---
+export const applyDamageToPlayer = async (roomId: string, playerId: string, damage: number) => {
+    const pPath = ref(database, playerPath(roomId, playerId));
+    const snapshot = await get(pPath);
+    const char = snapshot.val() as CharacterSheet;
+    
+    if (!char || damage <= 0) return { damageToHealth: 0, armorDestroyed: false, woundsGained: 0, isDead: false, newHealth: 0, maxHealth: 1 };
+
+    let currentArmor = char.vitals.armor?.current ?? 0;
+    let currentHealth = char.vitals.health.current;
+    let currentWounds = char.vitals.wounds.current;
+    const maxHealth = char.vitals.health.max || 10;
+    const maxWounds = char.vitals.wounds.max || 2;
+
+    let damageToHealth = 0;
+    let armorDestroyed = false;
+
+    if (currentArmor > 0) {
+        if (damage < currentArmor) {
+            // Armor absorbs completely
+            return { damageToHealth: 0, armorDestroyed: false, woundsGained: 0, isDead: false, newHealth: currentHealth, maxHealth };
+        } else {
+            // Armor destroyed
+            armorDestroyed = true;
+            damageToHealth = damage - currentArmor;
+            currentArmor = 0;
+        }
+    } else {
+        damageToHealth = damage;
+    }
+
+    if (damageToHealth <= 0 && armorDestroyed) {
+        // Edge case: Damage equals AP
+        await update(pPath, { "vitals/armor/current": 0 });
+        return { damageToHealth: 0, armorDestroyed: true, woundsGained: 0, isDead: false, newHealth: currentHealth, maxHealth };
+    }
+
+    // Apply health damage
+    currentHealth -= damageToHealth;
+
+    // Wound rollover logic
+    let woundsGained = 0;
+    while (currentHealth <= 0 && currentWounds < maxWounds) {
+        currentWounds += 1;
+        woundsGained += 1;
+        currentHealth += maxHealth;
+    }
+
+    // Clamp to death state
+    let isDead = false;
+    if (currentWounds >= maxWounds) {
+        currentWounds = maxWounds;
+        currentHealth = 0;
+        isDead = true;
+    }
+
+    const updates: Record<string, number> = {
+        "vitals/health/current": currentHealth,
+        "vitals/wounds/current": currentWounds,
+    };
+    if (armorDestroyed) {
+        updates["vitals/armor/current"] = 0;
+    }
+
+    await update(pPath, updates);
+
+    return { damageToHealth, armorDestroyed, woundsGained, isDead, newHealth: currentHealth, maxHealth };
 };
 
 // --- TACTICAL COMBAT SYSTEM ---
@@ -491,7 +561,7 @@ export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
         return;
     }
 
-    // Otherwise (orphan NPC token or player token) — just remove the token entry
+// Otherwise (orphan NPC token or player token) — just remove the token entry
     const updates: any = {};
     updates[`tokens/${tokenId}`] = null;
 
@@ -503,6 +573,21 @@ export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
         updates[`currentTurnIndex`] = newIndex;
     }
 
+    await update(encPath, updates);
+};
+
+export const addGridObstacle = async (roomId: string, obstacle: any) => {
+    const obPath = ref(database, `${roomPath(roomId)}/encounter/obstacles/${obstacle.id}`);
+    await set(obPath, obstacle);
+};
+
+export const removeGridObstacle = async (roomId: string, obstacleId: string) => {
+    const obPath = ref(database, `${roomPath(roomId)}/encounter/obstacles/${obstacleId}`);
+    await remove(obPath);
+};
+
+export const updateEncounterState = async (roomId: string, updates: Partial<EncounterState>) => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
     await update(encPath, updates);
 };
 

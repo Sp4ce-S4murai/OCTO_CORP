@@ -6,6 +6,7 @@ export interface Vitals {
     health: { current: number; max: number };
     wounds: { current: number; max: number };
     stress: { current: number; min: number };
+    armor?: { current: number; max: number };
 }
 
 export interface Stats {
@@ -128,6 +129,18 @@ export interface GridToken {
     movementPoints: { current: number; max: number };
 }
 
+export interface GridObstacle {
+    id: string;
+    x: number;
+    y: number;
+    type: 'wall' | 'cover' | 'hazard' | 'door';
+    color: string;
+    icon?: string;
+    isBlocking: boolean; // Does it block movement?
+    isOpaque: boolean; // Does it block line of sight? (for future use)
+    hp?: number; // Optional destructible HP
+}
+
 export interface EncounterState {
     isActive: boolean;
     status: 'rolling' | 'active'; // 'rolling' means waiting for inputs, 'active' means combat is running
@@ -137,6 +150,7 @@ export interface EncounterState {
     round: number;
     npcs?: Record<string, NpcData>; // Warden's custom NPCs
     tokens?: Record<string, GridToken>; // Tactical Grid positions
+    obstacles?: Record<string, GridObstacle>; // Tactical Grid obstacles
     lastAttackEvent?: { id: number, attacker: string, target: string, weapon: string, damage: number, message: string, success: boolean };
 }
 
