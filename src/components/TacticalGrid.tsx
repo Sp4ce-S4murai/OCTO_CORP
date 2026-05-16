@@ -242,7 +242,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
     };
 
-    const handleNpcAttackPlayer = (npcId: string) => {
+    const handleNpcAttackPlayer = async (npcId: string) => {
         const ctrl = npcDmgControls[npcId];
         if (!ctrl?.playerId) return;
         const npc = npcs[npcId];
