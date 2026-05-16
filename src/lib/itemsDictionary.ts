@@ -1,30 +1,6 @@
 import { Item, Weapon } from "../types/character";
 
 export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
-    "vacc-suit": {
-        id: "vacc-suit",
-        name: "Traje Espacial (Vaccsuit)",
-        description: "Traje padrão para o vácuo, fornece oxigênio e regulação térmica.",
-        type: "gear",
-        weight: 2,
-        quantity: 1
-    },
-    "med-scanner": {
-        id: "med-scanner",
-        name: "Scanner Médico",
-        description: "Analisa sinais vitais e diagnostica ferimentos e contaminações.",
-        type: "tool",
-        weight: 1,
-        quantity: 1
-    },
-    "mag-boots": {
-        id: "mag-boots",
-        name: "Botas Magnéticas",
-        description: "Permite andar em gravidade zero sobre superfícies metálicas.",
-        type: "gear",
-        weight: 1,
-        quantity: 1
-    },
     "pistol": {
         id: "pistol",
         name: "Pistola",
@@ -102,31 +78,20 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
         baseStat: "combat",
         bonus: 0,
         imageUrl: "/images/weapons/molecular_sword.png"
-    } as Weapon,
-    "stimpak": {
-        id: "stimpak",
-        name: "Stim-pak",
-        description: "Injeção de emergência que cura 1d10 de Vida.",
-        type: "gear",
-        weight: 0,
-        quantity: 3
-    }
+    } as Weapon
 };
 
 export const STARTER_KITS: Record<string, (Item | Weapon)[]> = {
     "soldier-kit": [
-        GLOBAL_ITEMS["vacc-suit"],
         GLOBAL_ITEMS["assault-rifle"],
-        GLOBAL_ITEMS["stimpak"]
+        GLOBAL_ITEMS["pistol"]
     ],
     "teamster-kit": [
-        GLOBAL_ITEMS["vacc-suit"],
         GLOBAL_ITEMS["molecular-sword"],
-        GLOBAL_ITEMS["mag-boots"]
+        GLOBAL_ITEMS["shotgun"]
     ],
-    "scientist-kit": [
-        GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["pistol"],
-        GLOBAL_ITEMS["med-scanner"]
+    "sniper-kit": [
+        GLOBAL_ITEMS["sniper-rifle"],
+        GLOBAL_ITEMS["pistol"]
     ]
 };
