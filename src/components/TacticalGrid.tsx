@@ -824,7 +824,11 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 className={`border transition-colors flex items-center justify-center relative cursor-crosshair ${bgClass}`}
                                 style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
                             >
-                                <div className={`w-1 h-1 rounded-full pointer-events-none ${isMovable ? 'bg-emerald-500/50' : isAttackable ? 'bg-red-500/30' : 'bg-emerald-900/30'}`} />
+                                {/* Obstacles Rendering */}
+                                {obs && (
+                                    <div className={`absolute inset-0 ${obs.color} ${obs.type === 'cover' ? 'opacity-50 h-1/2 mt-auto' : 'opacity-80'}`} />
+                                )}
+                                <div className={`w-1 h-1 z-10 rounded-full pointer-events-none ${isMovable ? 'bg-emerald-500/50' : isAttackable ? 'bg-red-500/30' : 'bg-emerald-900/30'}`} />
                             </div>
                         );
                     })}
