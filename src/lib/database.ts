@@ -1,6 +1,7 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
 import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
+import { BALANCED_WEAPONS } from "./itemPresets";
 import { CombatState, Token } from "../types/combat";
 
 
@@ -369,7 +370,8 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
         },
         skills: {
             trained: {}, expert: {}, master: {}
-        }
+        },
+        inventory: BALANCED_WEAPONS
     };
 };
 

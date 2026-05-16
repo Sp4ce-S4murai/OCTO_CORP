@@ -291,13 +291,19 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                                             }
 
                                             return (
-                                                <div key={`${w.id}-${i}`} className="border border-red-900/40 bg-zinc-950 flex flex-col">
-                                                    <div className="p-2 flex justify-between items-start">
-                                                        <div>
-                                                            <p className="text-sm font-bold text-red-300 uppercase tracking-widest">{w.name}</p>
-                                                            <p className="text-xs text-zinc-500 italic">{w.description}</p>
-                                                        </div>
-                                                    </div>
+                                                <div key={`${w.id}-${i}`} className="border border-red-900/40 bg-zinc-950 flex flex-col group">
+                                                     <div className="p-2 flex gap-3 items-start">
+                                                         {w.imageUrl && (
+                                                             <div className="w-12 h-12 shrink-0 border border-red-900/50 overflow-hidden relative">
+                                                                 <img src={w.imageUrl} alt={w.name} className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" />
+                                                                 <div className="absolute inset-0 bg-red-500/5 pointer-events-none" />
+                                                             </div>
+                                                         )}
+                                                         <div className="flex-1">
+                                                             <p className="text-sm font-bold text-red-300 uppercase tracking-widest">{w.name}</p>
+                                                             <p className="text-[10px] text-zinc-500 italic line-clamp-1">{w.description}</p>
+                                                         </div>
+                                                     </div>
                                                     <div className="px-2 pb-1 flex gap-2 text-[10px] font-mono text-zinc-500">
                                                         <span className="text-red-400">💥 {w.damage}</span>
                                                         <span>🎯 {w.range} casas</span>

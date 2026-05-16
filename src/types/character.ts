@@ -57,6 +57,7 @@ export interface Item {
     type: ItemType;
     weight: number;
     quantity: number;
+    imageUrl?: string;
 }
 
 export interface Weapon extends Item {

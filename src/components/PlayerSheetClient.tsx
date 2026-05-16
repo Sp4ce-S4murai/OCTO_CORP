@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { subscribeToPlayer, updatePlayer, updatePlayerNested, createEmptyCharacter, createPlayer, submitInitiative, nextTurn, pushLog, updateNpcHp } from "@/lib/database";
 import { CharacterSheet, EncounterState, NpcData, Weapon } from "@/types/character";
+import { BALANCED_WEAPONS } from "@/lib/itemPresets";
 import { Lock, Unlock, User, Upload, Swords, AlertTriangle, Crosshair, Download, UploadCloud, ChevronDown, ChevronRight, X, Package } from "lucide-react";
 import Link from "next/link";
 
@@ -1038,14 +1039,30 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <section className="mb-8">
                     <CollapsibleSection title="INVENTÁRIO">
                         <div className="flex flex-col gap-4">
+                            <button
+                                onClick={() => {
+                                    if(confirm("Deseja substituir todo o seu inventário pelo novo Arsenal Rebalanceado?")) {
+                                        handleUpdate("inventory", BALANCED_WEAPONS);
+                                    }
+                                }}
+                                className="self-end text-[10px] font-bold text-red-500/70 border border-red-900/50 px-3 py-1 hover:bg-red-900/20 transition-colors"
+                            >
+                                ⚠ RESTAURAR ARSENAL PADRÃO
+                            </button>
                             {/* ITEM LIST */}
                             {(!character.inventory || character.inventory.length === 0) ? (
                                 <div className="text-emerald-700/50 italic text-sm p-4 bg-emerald-950/10 border border-emerald-900/30">Sem itens registrados.</div>
                             ) : (
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     {character.inventory.map((item, index) => (
-                                        <div key={`${item.id}-${index}`} className="flex justify-between items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors">
-                                            <div className="flex flex-col">
+                                        <div key={`${item.id}-${index}`} className="flex items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors gap-4 group">
+                                            {item.imageUrl && (
+                                                <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 border border-emerald-900/50 overflow-hidden relative">
+                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" />
+                                                    <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />
+                                                </div>
+                                            )}
+                                            <div className="flex flex-col flex-1">
                                                 <span className="text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-2">
                                                     {item.type === 'weapon' ? <Crosshair size={16} className="text-red-500"/> : <Package size={16}/>}
                                                     {item.name} <span className="text-xs text-emerald-600">x{item.quantity}</span>
