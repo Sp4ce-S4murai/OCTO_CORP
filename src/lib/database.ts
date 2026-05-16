@@ -176,6 +176,9 @@ export const pushLog = async (roomId: string, log: Omit<RollLog, 'id'>) => {
 
 export const startEncounter = async (roomId: string) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const current = snapshot.val() as EncounterState;
+
     const initialEncounter: EncounterState = {
         isActive: true,
         status: 'rolling',
@@ -183,7 +186,10 @@ export const startEncounter = async (roomId: string) => {
         turnOrder: [],
         currentTurnIndex: 0,
         round: 1,
-        npcs: {}
+        npcs: current?.npcs || {},
+        obstacles: current?.obstacles || {},
+        gridSize: current?.gridSize || 20,
+        tokens: current?.tokens || {}
     };
     await set(encPath, initialEncounter);
 };

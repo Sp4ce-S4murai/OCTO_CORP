@@ -153,13 +153,13 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
 
         if (isEditorMode) {
+            const obsId = `obs_${x}_${y}`;
             if (editorTool === 'eraser') {
-                // Find obstacle at this pos using values to avoid key mismatch
                 const obsAtPos = Object.values(encounter?.obstacles || {}).find(o => Number(o.x) === x && Number(o.y) === y);
                 if (obsAtPos) removeGridObstacle(roomId, obsAtPos.id);
             } else {
                 addGridObstacle(roomId, {
-                    id: `obs_${x}_${y}`,
+                    id: obsId,
                     x: Number(x), 
                     y: Number(y),
                     type: editorTool,
@@ -836,7 +836,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 {obs && (
                                     <div 
                                         key={obs.id}
-                                        className={`absolute inset-0 z-0 ${obs.color} ${obs.type === 'cover' ? 'h-1/2 mt-auto' : 'h-full'} border border-black/20 pointer-events-none`} 
+                                        className={`absolute inset-0 z-[5] ${obs.color} ${obs.type === 'cover' ? 'h-1/2 mt-auto' : 'h-full'} border border-black/40 pointer-events-none shadow-inner`} 
                                     />
                                 )}
                                 <div className={`w-1 h-1 z-10 rounded-full pointer-events-none ${isMovable ? 'bg-emerald-500/50' : isAttackable ? 'bg-red-500/30' : 'bg-emerald-900/30'}`} />
