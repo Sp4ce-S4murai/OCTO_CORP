@@ -56,7 +56,11 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [editorColor, setEditorColor] = useState('bg-zinc-700');
     
     // Grid settings
-    const [gridSize, setGridSize] = useState(20);
+    const gridSize = encounter?.gridSize || 20;
+
+    const handleGridSizeChange = (newSize: number) => {
+        updateEncounterState(roomId, { gridSize: newSize });
+    };
 
     const handleExportGrid = () => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(encounter, null, 2));
@@ -151,16 +155,17 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
         if (isEditorMode) {
             if (editorTool === 'eraser') {
-                // Find obstacle at this pos
-                const obsId = Object.keys(encounter?.obstacles || {}).find(k => encounter!.obstacles![k].x === x && encounter!.obstacles![k].y === y);
-                if (obsId) removeGridObstacle(roomId, obsId);
+                // Find obstacle at this pos using values to avoid key mismatch
+                const obsAtPos = Object.values(encounter?.obstacles || {}).find(o => Number(o.x) === x && Number(o.y) === y);
+                if (obsAtPos) removeGridObstacle(roomId, obsAtPos.id);
             } else {
                 addGridObstacle(roomId, {
                     id: `obs_${x}_${y}`,
-                    x, y,
+                    x: Number(x), 
+                    y: Number(y),
                     type: editorTool,
                     color: editorColor,
-                    isBlocking: editorTool !== 'hazard', // hazards don't block movement
+                    isBlocking: editorTool !== 'hazard',
                     isOpaque: editorTool === 'wall' || editorTool === 'door'
                 });
             }
@@ -705,14 +710,18 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                     <button onClick={() => setEditorTool('eraser')} className={`p-1.5 border ${editorTool === 'eraser' ? 'bg-red-900/50 border-red-500 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Apagar (Borracha)"><Trash2 size={14} /></button>
                                     <select value={editorColor} onChange={e => setEditorColor(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-300 p-1 outline-none text-xs ml-2">
                                         <option value="bg-zinc-700">Cinza</option>
-                                        <option value="bg-red-900">Vermelho</option>
-                                        <option value="bg-amber-900">Amarelo</option>
-                                        <option value="bg-blue-900">Azul</option>
-                                        <option value="bg-green-900">Verde</option>
-                                        <option value="bg-purple-900">Roxo</option>
+                                        <option value="bg-zinc-400">Cinza Claro</option>
+                                        <option value="bg-red-600">Vermelho</option>
+                                        <option value="bg-amber-600">Laranja</option>
+                                        <option value="bg-yellow-500">Amarelo</option>
+                                        <option value="bg-blue-600">Azul</option>
+                                        <option value="bg-emerald-600">Verde</option>
+                                        <option value="bg-purple-600">Roxo</option>
+                                        <option value="bg-indigo-600">Índigo</option>
+                                        <option value="bg-rose-600">Rosa</option>
                                     </select>
                                     <div className="flex items-center gap-1 ml-4 text-xs text-zinc-400">
-                                        Tam: <input type="number" value={gridSize} onChange={(e) => setGridSize(Math.max(10, Math.min(100, Number(e.target.value))))} className="w-12 bg-zinc-900 border border-zinc-700 text-center p-1" />
+                                        Tam: <input type="number" value={gridSize} onChange={(e) => handleGridSizeChange(Math.max(10, Math.min(100, Number(e.target.value))))} className="w-12 bg-zinc-900 border border-zinc-700 text-center p-1" />
                                     </div>
                                 </div>
                             )}
@@ -794,14 +803,14 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         height: `${gridSize * CELL_SIZE}px`
                     }}
                 >
-                    {/* Cells */}
                     {Array.from({ length: gridSize * gridSize }).map((_, i) => {
                         const x = i % gridSize;
                         const y = Math.floor(i / gridSize);
                         let isMovable = false;
                         let isAttackable = false;
-                        const obsId = Object.keys(encounter?.obstacles || {}).find(k => encounter!.obstacles![k].x === x && encounter!.obstacles![k].y === y);
-                        const obs = obsId ? encounter!.obstacles![obsId] : null;
+                        
+                        // Use values for more robust lookup with Number conversion
+                        const obs = Object.values(encounter?.obstacles || {}).find(o => Number(o.x) === x && Number(o.y) === y);
 
                         // Only show movement range when it's the player's own turn (or warden)
                         const canHighlight = isWarden || isMyTurn;
@@ -826,7 +835,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                             >
                                 {/* Obstacles Rendering */}
                                 {obs && (
-                                    <div className={`absolute inset-0 ${obs.color} ${obs.type === 'cover' ? 'opacity-50 h-1/2 mt-auto' : 'opacity-80'}`} />
+                                    <div 
+                                        key={obs.id}
+                                        className={`absolute inset-0 z-0 ${obs.color} ${obs.type === 'cover' ? 'h-1/2 mt-auto' : 'h-full'} border border-black/20 pointer-events-none`} 
+                                    />
                                 )}
                                 <div className={`w-1 h-1 z-10 rounded-full pointer-events-none ${isMovable ? 'bg-emerald-500/50' : isAttackable ? 'bg-red-500/30' : 'bg-emerald-900/30'}`} />
                             </div>

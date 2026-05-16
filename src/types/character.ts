@@ -151,6 +151,7 @@ export interface EncounterState {
     npcs?: Record<string, NpcData>; // Warden's custom NPCs
     tokens?: Record<string, GridToken>; // Tactical Grid positions
     obstacles?: Record<string, GridObstacle>; // Tactical Grid obstacles
+    gridSize?: number; // Tactical Grid size
     lastAttackEvent?: { id: number, attacker: string, target: string, weapon: string, damage: number, message: string, success: boolean };
 }
 
