@@ -167,7 +167,7 @@ export function GlobalInventoryEditor({ roomId, globalInventory }: Props) {
                     <div key={item.id} className="bg-zinc-950 border border-emerald-900/30 p-3 flex gap-4 group hover:border-emerald-500 transition-colors relative overflow-hidden">
                         {item.imageUrl && (
                             <div className="w-16 h-16 shrink-0 border border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black">
-                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover avatar-filter-normal opacity-70 group-hover:opacity-100 transition-all duration-700" />
+                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover transition-all duration-700" />
                             </div>
                         )}
                         <div className="flex-1 flex flex-col justify-between">

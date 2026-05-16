@@ -78,5 +78,18 @@ export const BALANCED_WEAPONS: Weapon[] = [
         baseStat: "combat",
         bonus: 0,
         imageUrl: "/images/weapons/molecular_sword.png"
+    },
+    {
+        id: "vibro_knife_01",
+        name: "Vibro-Faca",
+        description: "Faca de combate ultra-sônica de alta frequência.",
+        type: "weapon",
+        weight: 1,
+        quantity: 1,
+        damage: "1d10+3",
+        range: 1,
+        baseStat: "combat",
+        bonus: 0,
+        imageUrl: "/images/weapons/v.png"
     }
 ];

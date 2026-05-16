@@ -59,6 +59,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
     const [activePanicTest, setActivePanicTest] = useState<any>(null);
     const [wardenAlert, setWardenAlert] = useState<{ type: 'damage' | 'stress', value: number, text: string } | null>(null);
     const [wardenToast, setWardenToast] = useState<{ text: string, id: number } | null>(null);
+    const [selectedItemForModal, setSelectedItemForModal] = useState<Item | Weapon | null>(null);
 
     const [showPopupId, setShowPopupId] = useState<number | null>(null);
 
@@ -1045,10 +1046,14 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                             ) : (
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     {character.inventory.map((item, index) => (
-                                        <div key={`${item.id}-${index}`} className="flex items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors gap-4 group">
+                                        <div 
+                                            key={`${item.id}-${index}`} 
+                                            className="flex items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors gap-4 group cursor-pointer"
+                                            onClick={() => setSelectedItemForModal(item)}
+                                        >
                                             {item.imageUrl && (
                                                 <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 border border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black group-hover:border-emerald-500 transition-colors">
-                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover avatar-filter-normal opacity-70 group-hover:opacity-100 transition-all duration-700" />
+                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover transition-all duration-700" />
                                                 </div>
                                             )}
                                             <div className="flex flex-col flex-1">
@@ -1352,6 +1357,56 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                 <span className="text-zinc-500 font-bold uppercase tracking-widest">ATAQUE FALHOU</span>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ITEM DETAIL MODAL */}
+            {selectedItemForModal && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setSelectedItemForModal(null)}>
+                    <div className="bg-zinc-950 border-2 border-emerald-500 shadow-[0_0_50px_rgba(16,185,129,0.3)] max-w-lg w-full p-6 flex flex-col gap-6 relative animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setSelectedItemForModal(null)} className="absolute top-4 right-4 text-emerald-500/50 hover:text-emerald-500 transition-colors">
+                            <X size={24} />
+                        </button>
+
+                        <div className="flex gap-6">
+                            {selectedItemForModal.imageUrl && (
+                                <div className="w-32 h-32 shrink-0 border-2 border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black">
+                                    <img src={selectedItemForModal.imageUrl} alt={selectedItemForModal.name} className="w-full h-full object-cover" />
+                                </div>
+                            )}
+                            <div className="flex flex-col justify-center">
+                                <h2 className="text-2xl font-bold uppercase tracking-widest text-emerald-400">
+                                    {selectedItemForModal.name}
+                                </h2>
+                                <span className="text-emerald-600 font-mono text-xs uppercase tracking-tighter mt-1">
+                                    TIPO: {selectedItemForModal.type} | PESO: {selectedItemForModal.weight}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 border-t border-emerald-900/30 pt-4">
+                            <p className="text-emerald-200/80 leading-relaxed italic">
+                                &quot;{selectedItemForModal.description}&quot;
+                            </p>
+
+                            {selectedItemForModal.type === 'weapon' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-red-950/20 border border-red-900/50 p-4 flex flex-col items-center gap-1">
+                                        <span className="text-[10px] text-red-500/70 font-bold uppercase">Dano em D10</span>
+                                        <span className="text-2xl font-black text-red-400 font-mono">{(selectedItemForModal as Weapon).damage}</span>
+                                    </div>
+                                    <div className="bg-blue-950/20 border border-blue-900/50 p-4 flex flex-col items-center gap-1">
+                                        <span className="text-[10px] text-blue-500/70 font-bold uppercase">Alcance (Casas)</span>
+                                        <span className="text-2xl font-black text-blue-400 font-mono">{(selectedItemForModal as Weapon).range}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <button onClick={() => setSelectedItemForModal(null)} className="mt-4 w-full bg-emerald-900 border border-emerald-500 hover:bg-emerald-800 text-emerald-100 font-bold uppercase tracking-widest py-3 transition-colors">
+                            Fechar Relatório
+                        </button>
                     </div>
                 </div>
             )}

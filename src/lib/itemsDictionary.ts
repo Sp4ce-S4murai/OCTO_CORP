@@ -7,7 +7,8 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
         description: "Traje padrão para o vácuo, fornece oxigênio e regulação térmica.",
         type: "gear",
         weight: 2,
-        quantity: 1
+        quantity: 1,
+        imageUrl: "/images/weapons/vacsuit.png"
     },
     "med-scanner": {
         id: "med-scanner",
@@ -102,6 +103,19 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
         baseStat: "combat",
         bonus: 0,
         imageUrl: "/images/weapons/molecular_sword.png"
+    } as Weapon,
+    "vibro-knife": {
+        id: "vibro-knife",
+        name: "Vibro-Faca",
+        description: "Faca de combate ultra-sônica de alta frequência.",
+        type: "weapon",
+        weight: 1,
+        quantity: 1,
+        damage: "1d10+3",
+        range: 1,
+        baseStat: "combat",
+        bonus: 0,
+        imageUrl: "/images/weapons/v.png"
     } as Weapon,
     "stimpak": {
         id: "stimpak",
