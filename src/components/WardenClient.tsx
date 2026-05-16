@@ -15,6 +15,7 @@ import { ShipDashboard } from "./ShipDashboard";
 import { ShipWardenPanel } from "./ShipWardenPanel";
 import { MiniSheet } from "./MiniSheet";
 import { GlobalInventoryEditor } from "./GlobalInventoryEditor";
+import { NPC_CLASSES, NPC_RANKS } from "@/lib/npcPresets";
 
 
 const getTimestamp = () => Date.now();
@@ -42,9 +43,12 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         color: "text-red-500",
         hp: 20,
         maxHp: 20,
+        combat: 45,
         movementMax: 6,
         attacks: [] as NpcAttack[],
     });
+    const [selectedNpcClass, setSelectedNpcClass] = useState<string>('Customizado');
+    const [selectedNpcRank, setSelectedNpcRank] = useState<string>('Normal');
     const [newNpcAttack, setNewNpcAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     // Per-NPC damage controls: npcId -> { playerId, amount }
     const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number }>>({});
@@ -850,17 +854,68 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
                         {/* Spawn NPC form */}
                         <div className="border-t border-red-900/30 pt-3">
-                            <span className="text-[10px] text-red-500/70 uppercase font-bold">Nova Ameaça</span>
+                            <span className="text-xs text-red-500/70 uppercase font-bold">Nova Ameaça</span>
                             <div className="flex flex-wrap gap-2 items-end mt-2">
+                                <div className="w-full flex gap-2">
+                                    <div className="flex flex-col gap-0.5 flex-1">
+                                        <label className="text-xs text-red-500/70 uppercase">Classe</label>
+                                        <select
+                                            value={selectedNpcClass}
+                                            onChange={e => {
+                                                const c = e.target.value;
+                                                setSelectedNpcClass(c);
+                                                if (NPC_CLASSES[c]) {
+                                                    const cls = NPC_CLASSES[c];
+                                                    const rank = NPC_RANKS[selectedNpcRank];
+                                                    setNewNpc(prev => ({
+                                                        ...prev,
+                                                        name: cls.name,
+                                                        combat: cls.combat + (rank?.combatMod || 0),
+                                                        hp: Math.floor(cls.hp * (rank?.hpMult || 1)),
+                                                        movementMax: cls.movementMax,
+                                                        icon: cls.icon,
+                                                        color: cls.color,
+                                                        attacks: cls.attacks
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-full font-mono"
+                                        >
+                                            {Object.keys(NPC_CLASSES).map(k => <option key={k} value={k}>{k}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 flex-1">
+                                        <label className="text-xs text-red-500/70 uppercase">Ranque</label>
+                                        <select
+                                            value={selectedNpcRank}
+                                            onChange={e => {
+                                                const r = e.target.value;
+                                                setSelectedNpcRank(r);
+                                                const cls = NPC_CLASSES[selectedNpcClass];
+                                                if (cls && NPC_RANKS[r]) {
+                                                    const rank = NPC_RANKS[r];
+                                                    setNewNpc(prev => ({
+                                                        ...prev,
+                                                        combat: cls.combat + rank.combatMod,
+                                                        hp: Math.floor(cls.hp * rank.hpMult),
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-full font-mono"
+                                        >
+                                            {Object.keys(NPC_RANKS).map(k => <option key={k} value={k}>{NPC_RANKS[k].name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
                                 <input
                                     type="text"
                                     placeholder="Nome do NPC"
-                                    className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-36"
+                                    className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-full mt-1"
                                     value={newNpc.name}
                                     onChange={e => setNewNpc(prev => ({...prev, name: e.target.value}))}
                                 />
-                                <div className="flex flex-col gap-0.5">
-                                    <label className="text-[10px] text-red-500/70 uppercase">INIC</label>
+                                <div className="flex flex-col gap-0.5 mt-1">
+                                    <label className="text-xs text-red-500/70 uppercase">INIC</label>
                                     <input
                                         type="number"
                                         className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
@@ -868,8 +923,17 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                         onChange={e => setNewNpc(prev => ({...prev, initiative: parseInt(e.target.value)||0}))}
                                     />
                                 </div>
-                                <div className="flex flex-col gap-0.5">
-                                    <label className="text-[10px] text-red-500/70 uppercase">HP</label>
+                                <div className="flex flex-col gap-0.5 mt-1">
+                                    <label className="text-xs text-red-500/70 uppercase">CBT</label>
+                                    <input
+                                        type="number"
+                                        className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
+                                        value={newNpc.combat}
+                                        onChange={e => setNewNpc(prev => ({...prev, combat: parseInt(e.target.value)||0}))}
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-0.5 mt-1">
+                                    <label className="text-xs text-red-500/70 uppercase">HP</label>
                                     <input
                                         type="number"
                                         className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
@@ -877,8 +941,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                         onChange={e => setNewNpc(prev => ({...prev, hp: parseInt(e.target.value)||0}))}
                                     />
                                 </div>
-                                <div className="flex flex-col gap-0.5">
-                                    <label className="text-[10px] text-red-500/70 uppercase">MOVE</label>
+                                <div className="flex flex-col gap-0.5 mt-1">
+                                    <label className="text-xs text-red-500/70 uppercase">MOVE</label>
                                     <input
                                         type="number"
                                         className="bg-zinc-950 border border-red-900/50 text-red-300 p-2 text-sm outline-none w-14"
@@ -887,8 +951,8 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                     />
                                 </div>
                                 {/* Icon selector */}
-                                <div className="flex flex-col gap-0.5">
-                                    <label className="text-[10px] text-red-500/70 uppercase">Ícone</label>
+                                <div className="flex flex-col gap-0.5 mt-1 w-full">
+                                    <label className="text-xs text-red-500/70 uppercase">Ícone</label>
                                     <div className="flex gap-1">
                                         {['👾','💀','🤖','🕷️','👤','🐙','🦂','🧹','👹','🐍'].map(icon => (
                                             <button
@@ -905,18 +969,18 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                 </div>
                                 {/* Attacks selector */}
                                 <div className="w-full border-t border-red-900/30 pt-2 mt-1">
-                                    <span className="text-[10px] text-red-500/70 uppercase">Ataques ({newNpc.attacks.length})</span>
+                                    <span className="text-xs text-red-500/70 uppercase">Ataques ({newNpc.attacks.length})</span>
                                     {newNpc.attacks.map((atk, i) => (
                                         <div key={i} className="flex items-center gap-1 mt-1">
-                                            <span className="text-[10px] text-red-300 flex-1 truncate font-mono">{atk.name} | {atk.damage} | {atk.range}sq</span>
-                                            <button onClick={() => setNewNpc(p => ({ ...p, attacks: p.attacks.filter((_, idx) => idx !== i) }))} className="text-red-700 hover:text-red-400"><X size={10} /></button>
+                                            <span className="text-xs text-red-300 flex-1 truncate font-mono">{atk.name} | {atk.damage} | {atk.range}sq</span>
+                                            <button onClick={() => setNewNpc(p => ({ ...p, attacks: p.attacks.filter((_, idx) => idx !== i) }))} className="text-red-700 hover:text-red-400"><X size={12} /></button>
                                         </div>
                                     ))}
-                                    <div className="flex gap-1 mt-1 w-full flex-wrap">
-                                        <input type="text" placeholder="Ataque" value={newNpcAttack.name} onChange={e => setNewNpcAttack(p => ({ ...p, name: e.target.value }))} className="flex-1 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono min-w-[80px]" />
-                                        <input type="text" placeholder="Dano" value={newNpcAttack.damage} onChange={e => setNewNpcAttack(p => ({ ...p, damage: e.target.value }))} className="w-16 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono" />
-                                        <input type="number" placeholder="Alc" value={newNpcAttack.range} onChange={e => setNewNpcAttack(p => ({ ...p, range: Number(e.target.value) }))} className="w-10 bg-zinc-950 border border-red-900/50 text-red-300 p-1 text-[10px] outline-none font-mono" />
-                                        <button onClick={() => { if(newNpcAttack.name && newNpcAttack.damage) { setNewNpc(p => ({ ...p, attacks: [...p.attacks, newNpcAttack] })); setNewNpcAttack({ name: "", damage: "1d10", range: 1 }); } }} className="bg-red-900/50 hover:bg-red-800 text-red-300 px-2 font-bold border border-red-800 text-xs">+</button>
+                                    <div className="flex gap-1 mt-2 w-full flex-wrap">
+                                        <input type="text" placeholder="Ataque" value={newNpcAttack.name} onChange={e => setNewNpcAttack(p => ({ ...p, name: e.target.value }))} className="flex-1 bg-zinc-950 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono min-w-[80px]" />
+                                        <input type="text" placeholder="Dano" value={newNpcAttack.damage} onChange={e => setNewNpcAttack(p => ({ ...p, damage: e.target.value }))} className="w-16 bg-zinc-950 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
+                                        <input type="number" placeholder="Alc" value={newNpcAttack.range} onChange={e => setNewNpcAttack(p => ({ ...p, range: Number(e.target.value) }))} className="w-12 bg-zinc-950 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
+                                        <button onClick={() => { if(newNpcAttack.name && newNpcAttack.damage) { setNewNpc(p => ({ ...p, attacks: [...p.attacks, newNpcAttack] })); setNewNpcAttack({ name: "", damage: "1d10", range: 1 }); } }} className="bg-red-900/50 hover:bg-red-800 text-red-300 px-3 font-bold border border-red-800 text-sm">+</button>
                                     </div>
                                 </div>
 
@@ -927,13 +991,16 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                                 name: newNpc.name,
                                                 initiative: newNpc.initiative,
                                                 icon: newNpc.icon,
-                                                color: 'bg-red-500',
+                                                color: newNpc.color || 'bg-red-500',
                                                 hp: newNpc.hp,
                                                 maxHp: newNpc.hp,
+                                                combat: newNpc.combat,
                                                 movementMax: newNpc.movementMax,
                                                 attacks: newNpc.attacks,
                                             });
-                                            setNewNpc({ name: '', initiative: 10, icon: '👾', color: 'text-red-500', hp: 20, maxHp: 20, movementMax: 6, attacks: [] });
+                                            setNewNpc({ name: '', initiative: 10, icon: '👾', color: 'text-red-500', hp: 20, maxHp: 20, combat: 45, movementMax: 6, attacks: [] });
+                                            setSelectedNpcClass('Customizado');
+                                            setSelectedNpcRank('Normal');
                                         }
                                     }}
                                     className="bg-red-900 text-xs px-4 py-2 text-red-100 font-bold uppercase transition hover:bg-red-800 flex items-center gap-1 mt-2 w-full justify-center"
