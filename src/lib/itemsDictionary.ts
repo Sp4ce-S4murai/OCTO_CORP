@@ -25,53 +25,83 @@ export const GLOBAL_ITEMS: Record<string, Item | Weapon> = {
         weight: 1,
         quantity: 1
     },
+    "pistol": {
+        id: "pistol",
+        name: "Pistola",
+        description: "Pistola semiautomática padrão de 12.7mm AP.",
+        type: "weapon",
+        weight: 1,
+        quantity: 1,
+        damage: "1d10",
+        range: 10,
+        baseStat: "combat",
+        bonus: 0,
+        imageUrl: "/images/weapons/pistol.png"
+    } as Weapon,
     "assault-rifle": {
         id: "assault-rifle",
         name: "Rifle de Assalto",
-        description: "Arma tática padrão militar. (4d10 Dano)",
+        description: "Fuzil de assalto bullpup confiável e modular.",
         type: "weapon",
-        damage: "4d10",
-        range: 15,
+        weight: 2,
+        quantity: 1,
+        damage: "3d10",
+        range: 20,
         baseStat: "combat",
         bonus: 0,
+        imageUrl: "/images/weapons/assault_rifle.png"
+    } as Weapon,
+    "shotgun": {
+        id: "shotgun",
+        name: "Escopeta (Punheteira)",
+        description: "Escopeta de bombeamento HS-12 Bulldog com munição de tungstênio.",
+        type: "weapon",
         weight: 2,
-        quantity: 1
+        quantity: 1,
+        damage: "4d10",
+        range: 5,
+        baseStat: "combat",
+        bonus: 0,
+        imageUrl: "/images/weapons/shotgun.png"
     } as Weapon,
     "flamethrower": {
         id: "flamethrower",
-        name: "Lança-chamas",
-        description: "Arma de Efeito de Área. (3d10 Dano)",
+        name: "Lança Chamas",
+        description: "Unidade incineradora industrial FT-84 'Hellfire'.",
         type: "weapon",
-        damage: "3d10",
-        range: 3,
+        weight: 3,
+        quantity: 1,
+        damage: "2d10",
+        range: 5,
         baseStat: "combat",
         bonus: 0,
-        weight: 2,
-        quantity: 1
+        imageUrl: "/images/weapons/flamethrower.png"
     } as Weapon,
-    "revolver": {
-        id: "revolver",
-        name: "Revólver",
-        description: "Arma de fogo confiável. (2d10 Dano)",
+    "sniper-rifle": {
+        id: "sniper-rifle",
+        name: "Rifle de Precisão",
+        description: "Rail-Sniper pesado M-99 'Goliath' para alvos de longo alcance.",
         type: "weapon",
-        damage: "2d10",
-        range: 8,
+        weight: 3,
+        quantity: 1,
+        damage: "4d10",
+        range: 40,
         baseStat: "combat",
-        bonus: 5,
-        weight: 1,
-        quantity: 1
-    } as Weapon,
-    "katana": {
-        id: "katana",
-        name: "Katana",
-        description: "Lâmina monomolecular para combate corpo a corpo.",
-        type: "weapon",
-        damage: "1d10+STR",
-        range: 1,
-        baseStat: "strength",
         bonus: 10,
+        imageUrl: "/images/weapons/sniper_rifle.png"
+    } as Weapon,
+    "molecular-sword": {
+        id: "molecular-sword",
+        name: "Espada Molecular",
+        description: "Lâmina nano-composta com borda monomolecular.",
+        type: "weapon",
         weight: 1,
-        quantity: 1
+        quantity: 1,
+        damage: "2d10+5",
+        range: 1,
+        baseStat: "combat",
+        bonus: 0,
+        imageUrl: "/images/weapons/molecular_sword.png"
     } as Weapon,
     "stimpak": {
         id: "stimpak",
@@ -91,12 +121,12 @@ export const STARTER_KITS: Record<string, (Item | Weapon)[]> = {
     ],
     "teamster-kit": [
         GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["katana"],
+        GLOBAL_ITEMS["molecular-sword"],
         GLOBAL_ITEMS["mag-boots"]
     ],
     "scientist-kit": [
         GLOBAL_ITEMS["vacc-suit"],
-        GLOBAL_ITEMS["revolver"],
+        GLOBAL_ITEMS["pistol"],
         GLOBAL_ITEMS["med-scanner"]
     ]
 };

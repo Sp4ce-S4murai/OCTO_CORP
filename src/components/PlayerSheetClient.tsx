@@ -1039,16 +1039,6 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 <section className="mb-8">
                     <CollapsibleSection title="INVENTÁRIO">
                         <div className="flex flex-col gap-4">
-                            <button
-                                onClick={() => {
-                                    if(confirm("Deseja substituir todo o seu inventário pelo novo Arsenal Rebalanceado?")) {
-                                        handleUpdate("inventory", BALANCED_WEAPONS);
-                                    }
-                                }}
-                                className="self-end text-[10px] font-bold text-red-500/70 border border-red-900/50 px-3 py-1 hover:bg-red-900/20 transition-colors"
-                            >
-                                ⚠ RESTAURAR ARSENAL PADRÃO
-                            </button>
                             {/* ITEM LIST */}
                             {(!character.inventory || character.inventory.length === 0) ? (
                                 <div className="text-emerald-700/50 italic text-sm p-4 bg-emerald-950/10 border border-emerald-900/30">Sem itens registrados.</div>
@@ -1057,9 +1047,8 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                                     {character.inventory.map((item, index) => (
                                         <div key={`${item.id}-${index}`} className="flex items-start bg-zinc-900/50 border border-emerald-900/50 p-4 hover:border-emerald-500 transition-colors gap-4 group">
                                             {item.imageUrl && (
-                                                <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 border border-emerald-900/50 overflow-hidden relative">
-                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" />
-                                                    <div className="absolute inset-0 bg-emerald-500/5 pointer-events-none" />
+                                                <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 border border-emerald-900/50 overflow-hidden relative scanline-overlay bg-black group-hover:border-emerald-500 transition-colors">
+                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover avatar-filter-normal opacity-70 group-hover:opacity-100 transition-all duration-700" />
                                                 </div>
                                             )}
                                             <div className="flex flex-col flex-1">
