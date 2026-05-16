@@ -49,6 +49,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     });
     const [selectedNpcClass, setSelectedNpcClass] = useState<string>('Customizado');
     const [selectedNpcRank, setSelectedNpcRank] = useState<string>('Normal');
+    const [cloneTargetId, setCloneTargetId] = useState<string>('');
     const [newNpcAttack, setNewNpcAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     // Per-NPC damage controls: npcId -> { playerId, amount }
     const [npcDmgControls, setNpcDmgControls] = useState<Record<string, { playerId: string; amount: number }>>({});
@@ -894,6 +895,39 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                         </select>
                                     </div>
                                 </div>
+
+                                {selectedNpcClass === 'Clone' && (
+                                    <label className="flex flex-col gap-0.5 mt-2 border-l-2 border-blue-900/50 pl-2 bg-blue-950/10 p-2">
+                                        <span className="text-[10px] text-blue-400 uppercase font-bold tracking-widest">Clonar de:</span>
+                                        <select
+                                            value={cloneTargetId}
+                                            onChange={e => {
+                                                const pid = e.target.value;
+                                                setCloneTargetId(pid);
+                                                const player = roomData?.players?.[pid];
+                                                if (player) {
+                                                    const rank = NPC_RANKS[selectedNpcRank];
+                                                    setNewNpc(prev => ({
+                                                        ...prev,
+                                                        name: `Clone: ${player.name}`,
+                                                        combat: (player.stats?.combat || 45) + (rank?.combatMod || 0),
+                                                        hp: Math.floor((player.vitals?.health?.max || 20) * (rank?.hpMult || 1)),
+                                                        maxHp: Math.floor((player.vitals?.health?.max || 20) * (rank?.hpMult || 1)),
+                                                        icon: '👥',
+                                                        color: 'text-zinc-400',
+                                                        attacks: []
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-950 border border-blue-900/50 text-blue-300 p-1.5 text-sm outline-none font-mono"
+                                        >
+                                            <option value="">Selecione um Jogador</option>
+                                            {Object.entries(roomData?.players || {}).map(([id, p]) => (
+                                                <option key={id} value={id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
                                 <input
                                     type="text"
                                     placeholder="Nome do NPC"
