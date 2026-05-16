@@ -551,7 +551,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         onClick={async () => {
                             if(confirm("Deseja resetar o Almoxarifado para o novo padrão balanceado? Isso substituirá a lista atual de itens globais.")) {
                                 const { GLOBAL_ITEMS } = await import('@/lib/itemsDictionary');
-                                const { database } from '@/lib/firebase';
+                                const { database } = await import('@/lib/firebase');
                                 const { ref, set } = await import('firebase/database');
                                 const invRef = ref(database, `rooms/${roomId}/globalInventory`);
                                 await set(invRef, GLOBAL_ITEMS);
