@@ -56,8 +56,6 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [editorColor, setEditorColor] = useState('bg-zinc-700');
     
     // Grid settings
-    const gridSize = encounter?.gridSize || 20;
-
     const handleGridSizeChange = (newSize: number) => {
         updateEncounterState(roomId, { gridSize: newSize });
     };
@@ -96,6 +94,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     }, [roomId]);
 
     const encounter = roomData?.encounter;
+    const gridSize = encounter?.gridSize || 20;
     const tokens = encounter?.tokens || {};
     const npcs = encounter?.npcs || {};
 
