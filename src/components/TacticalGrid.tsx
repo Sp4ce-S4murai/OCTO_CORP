@@ -25,6 +25,22 @@ const NPC_COLORS = [
 
 const NPC_ICONS = ["👾", "💀", "🤖", "🕷️", "👤", "🐙", "🦂", "🧟", "👹", "🐍"];
 
+const NPC_CLASSES: Record<string, { name: string, combat: number, hp: number, movementMax: number, icon: string, attacks: NpcAttack[], color: string }> = {
+    'Customizado': { name: '', combat: 45, hp: 20, movementMax: 6, icon: '👾', attacks: [], color: 'bg-red-500' },
+    'Alien': { name: 'Xenomorfo Base', combat: 60, hp: 30, movementMax: 8, icon: '👾', color: 'bg-purple-500', attacks: [{ name: 'Garras', damage: '2d10', range: 1 }] },
+    'Sintético': { name: 'Androide Hostil', combat: 50, hp: 40, movementMax: 6, icon: '🤖', color: 'bg-cyan-400', attacks: [{ name: 'Pancada Mecânica', damage: '1d10+5', range: 1 }] },
+    'Mercenário': { name: 'Mercenário Humano', combat: 40, hp: 20, movementMax: 6, icon: '👤', color: 'bg-orange-500', attacks: [{ name: 'Rifle', damage: '2d10', range: 5 }] },
+    'Criatura': { name: 'Monstro Local', combat: 45, hp: 25, movementMax: 6, icon: '🕷️', color: 'bg-yellow-400', attacks: [{ name: 'Mordida', damage: '1d10', range: 1 }] },
+    'Morto-Vivo': { name: 'Infectado', combat: 35, hp: 15, movementMax: 4, icon: '🧟', color: 'bg-pink-500', attacks: [{ name: 'Agarrão', damage: '1d5', range: 1 }] },
+};
+
+const NPC_RANKS: Record<string, { name: string, combatMod: number, hpMult: number }> = {
+    'Bucha': { name: 'Bucha (Minion)', combatMod: -15, hpMult: 0.5 },
+    'Normal': { name: 'Normal', combatMod: 0, hpMult: 1 },
+    'Elite': { name: 'Elite', combatMod: +15, hpMult: 1.5 },
+    'Chefe': { name: 'Chefe (Boss)', combatMod: +30, hpMult: 3 },
+};
+
 const EMPTY_NPC_FORM = {
     name: "",
     initiative: 10,
@@ -32,6 +48,7 @@ const EMPTY_NPC_FORM = {
     color: "bg-red-500",
     hp: 20,
     maxHp: 20,
+    combat: 45,
     movementMax: 6,
     attacks: [] as NpcAttack[],
 };
@@ -40,6 +57,8 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [roomData, setRoomData] = useState<RoomData | null>(null);
     const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
     const [npcForm, setNpcForm] = useState({ ...EMPTY_NPC_FORM });
+    const [selectedNpcClass, setSelectedNpcClass] = useState<string>('Customizado');
+    const [selectedNpcRank, setSelectedNpcRank] = useState<string>('Normal');
     const [showNpcForm, setShowNpcForm] = useState(false);
     const [newAttack, setNewAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     const [expandedNpc, setExpandedNpc] = useState<string | null>(null);
@@ -146,9 +165,12 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             hp: npcForm.hp,
             maxHp: npcForm.hp,
             movementMax: npcForm.movementMax,
+            combat: npcForm.combat,
             attacks: npcForm.attacks,
         });
         setNpcForm({ ...EMPTY_NPC_FORM });
+        setSelectedNpcClass('Customizado');
+        setSelectedNpcRank('Normal');
         setShowNpcForm(false);
     };
 
@@ -191,6 +213,45 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         let dmgDetail = "";
         let attackName = "Ataque Básico";
 
+        // To-Hit logic
+        const combatStat = npc.combat || 45;
+        const toHitRoll = Math.floor(Math.random() * 100) + 1;
+        const tens = Math.floor(toHitRoll / 10);
+        const ones = toHitRoll % 10;
+        const isDouble = (tens === ones) || (toHitRoll === 100);
+        
+        const isHit = toHitRoll <= combatStat || ctrl.attackIndex === undefined; // Direct damage auto-hits
+        const isCriticalHit = isHit && isDouble && ctrl.attackIndex !== undefined;
+
+        if (!isHit) {
+            pushLog(roomId, {
+                timestamp: Date.now(),
+                playerName: npc?.name || 'NPC',
+                playerId: ctrl.playerId,
+                statName: `ATAQUE DE ${(npc?.name || 'NPC').toUpperCase()} ERROU`,
+                statValue: combatStat,
+                roll: toHitRoll,
+                result: 'Failure',
+                customMessage: `O alvo esquivou ou o ataque falhou. (Rolou ${toHitRoll} vs CBT ${combatStat})`
+            });
+            import("@/lib/firebase").then(({ database }) => {
+                import("firebase/database").then(({ ref, update }) => {
+                    update(ref(database, `rooms/${roomId}/encounter`), {
+                        lastAttackEvent: {
+                            id: Date.now(),
+                            attacker: (npc?.name || 'NPC').toUpperCase(),
+                            target: target.name.toUpperCase(),
+                            weapon: "Ataque Básico",
+                            damage: 0,
+                            message: `Ataque Falhou! (Rolou ${toHitRoll} vs CBT ${combatStat})`,
+                            success: false
+                        }
+                    });
+                });
+            });
+            return;
+        }
+
         if (ctrl.attackIndex !== undefined && npc.attacks && npc.attacks[ctrl.attackIndex]) {
             const atk = npc.attacks[ctrl.attackIndex];
             attackName = atk.name;
@@ -206,10 +267,12 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     totalDmg += r;
                 }
                 totalDmg += bonus;
-                dmgDetail = `(D${sides}: ${rolls.join(', ')})${bonus ? ' +' + bonus : ''}`;
+                if (isCriticalHit) totalDmg *= 2; // Critical hit doubles total damage
+                dmgDetail = `(D${sides}: ${rolls.join(', ')})${bonus ? ' +' + bonus : ''}${isCriticalHit ? ' x2 (CRÍTICO)' : ''}`;
             } else {
                 totalDmg = parseInt(atk.damage) || 1;
-                dmgDetail = `(Fixo: ${totalDmg})`;
+                if (isCriticalHit) totalDmg *= 2;
+                dmgDetail = `(Fixo: ${totalDmg})${isCriticalHit ? ' (CRÍTICO)' : ''}`;
             }
         } else {
             totalDmg = ctrl.amount || 5;
@@ -222,7 +285,10 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         const newHp = Math.max(0, currentHp - totalDmg);
         updatePlayerNested(roomId, ctrl.playerId, 'vitals/health/current', newHp);
 
-        const msg = `Dano: ${totalDmg} ${dmgDetail} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}`;
+        const msg = `Dano: ${totalDmg} ${dmgDetail} | HP restante: ${newHp}/${target.vitals?.health?.max ?? '?'}${ctrl.attackIndex !== undefined ? ` | Rolou ${toHitRoll} vs CBT ${combatStat}` : ''}`;
+        
+        let resultType: any = 'Warden Damage';
+        if (isCriticalHit) resultType = 'Critical Success';
 
         pushLog(roomId, {
             timestamp: Date.now(),
@@ -230,8 +296,8 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             playerId: ctrl.playerId,
             statName: `ATAQUE DE ${(npc?.name || 'NPC').toUpperCase()} → ${target.name.toUpperCase()} (${attackName})`,
             statValue: totalDmg,
-            roll: 0,
-            result: 'Warden Damage',
+            roll: toHitRoll,
+            result: resultType,
             customMessage: msg,
         });
 
@@ -251,6 +317,20 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                 });
             });
         });
+
+        // Trigger panic test suggestion if damage is massive (>= 50% max HP) or critical
+        if (target.vitals?.health?.max && (totalDmg >= target.vitals.health.max / 2 || isCriticalHit)) {
+             pushLog(roomId, {
+                 timestamp: Date.now(),
+                 playerName: "SISTEMA",
+                 playerId: "SYSTEM",
+                 statName: `[!] AVISO: DANO MASSIVO OU CRÍTICO EM ${target.name.toUpperCase()}`,
+                 statValue: 0,
+                 roll: 0,
+                 result: 'Warden Message',
+                 customMessage: `O Mestre deve solicitar um TESTE DE PÂNICO devido ao dano crítico/massivo sofrido por ${target.name}.`
+             });
+        }
     };
 
     if (!roomData) return <div className="text-emerald-500 font-mono p-4 animate-pulse">Carregando Malha Tática...</div>;
@@ -325,25 +405,25 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                         <div className="px-2 pb-2 border-t border-red-900/30 pt-2 flex flex-col gap-2">
                                             {/* Direct HP */}
                                             <div className="flex items-center gap-1">
-                                                <span className="text-[10px] text-red-500/70 uppercase">HP Direto:</span>
+                                                <span className="text-xs text-red-500/70 uppercase">HP Direto:</span>
                                                 <input
                                                     type="number"
-                                                    className="w-14 bg-zinc-900 border border-red-900/50 text-red-300 text-xs text-center outline-none font-mono"
+                                                    className="w-16 bg-zinc-900 border border-red-900/50 text-red-300 text-sm text-center outline-none font-mono"
                                                     value={npc.hp}
                                                     onChange={e => updateNpcHp(roomId, npc.id, Number(e.target.value))}
                                                 />
-                                                <span className="text-[10px] text-zinc-500">/ {npc.maxHp}</span>
+                                                <span className="text-xs text-zinc-500">/ {npc.maxHp}</span>
                                             </div>
 
                                             {/* Attack player panel */}
                                             {!npc.isDead && roomData?.players && Object.keys(roomData.players).length > 0 && (
                                                 <div className="bg-red-950/20 border border-red-900/30 p-2 flex flex-col gap-1.5">
-                                                    <span className="text-[10px] text-red-400 font-bold uppercase flex items-center gap-1">
-                                                        <Swords size={10}/> Atacar Jogador
+                                                    <span className="text-xs text-red-400 font-bold uppercase flex items-center gap-1">
+                                                        <Swords size={12}/> Atacar Jogador
                                                     </span>
                                                     <div className="flex gap-1 flex-wrap">
                                                         <select
-                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] outline-none font-mono"
+                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1.5 text-xs outline-none font-mono"
                                                             value={npcDmgControls[npc.id]?.playerId || ''}
                                                             onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...( prev[npc.id] || { amount: 5 }), playerId: e.target.value } }))}
                                                         >
@@ -353,7 +433,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                             ))}
                                                         </select>
                                                         <select
-                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] outline-none font-mono"
+                                                            className="flex-1 min-w-0 bg-zinc-900 border border-red-900/40 text-red-300 p-1.5 text-xs outline-none font-mono"
                                                             value={npcDmgControls[npc.id]?.attackIndex ?? -1}
                                                             onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '', amount: 5 }), attackIndex: Number(e.target.value) === -1 ? undefined : Number(e.target.value) } }))}
                                                         >
@@ -365,7 +445,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                         {npcDmgControls[npc.id]?.attackIndex === undefined && (
                                                             <input
                                                                 type="number" min={1}
-                                                                className="w-12 bg-zinc-900 border border-red-900/40 text-red-300 p-1 text-[10px] text-center outline-none font-mono"
+                                                                className="w-14 bg-zinc-900 border border-red-900/40 text-red-300 p-1.5 text-xs text-center outline-none font-mono"
                                                                 value={npcDmgControls[npc.id]?.amount ?? 5}
                                                                 onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...(prev[npc.id] || { playerId: '' }), amount: Number(e.target.value) } }))}
                                                             />
@@ -373,7 +453,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                         <button
                                                             onClick={() => handleNpcAttackPlayer(npc.id)}
                                                             disabled={!npcDmgControls[npc.id]?.playerId}
-                                                            className="bg-red-900 hover:bg-red-700 text-red-100 px-2 py-1 text-[10px] font-bold uppercase border border-red-700 disabled:opacity-30 transition-colors w-full mt-1"
+                                                            className="bg-red-900 hover:bg-red-700 text-red-100 px-2 py-1.5 text-xs font-bold uppercase border border-red-700 disabled:opacity-30 transition-colors w-full mt-1"
                                                         >
                                                             EXECUTAR ATAQUE
                                                         </button>
@@ -384,11 +464,11 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                             {/* NPC defined attacks list (info only) */}
                                             {npc.attacks && npc.attacks.length > 0 && (
                                                 <div>
-                                                    <span className="text-[10px] text-red-500/70 uppercase font-bold block mb-1">Ataques definidos:</span>
+                                                    <span className="text-xs text-red-500/70 uppercase font-bold block mb-1">Ataques definidos:</span>
                                                     {npc.attacks.map((atk, i) => (
                                                         <div key={i} className="flex items-center justify-between bg-red-950/20 border border-red-900/20 px-2 py-1 rounded mb-0.5">
-                                                            <span className="text-[10px] text-red-300 font-bold uppercase">{atk.name}</span>
-                                                            <span className="text-[10px] text-zinc-400 font-mono">{atk.damage} | {atk.range}sq</span>
+                                                            <span className="text-xs text-red-300 font-bold uppercase">{atk.name}</span>
+                                                            <span className="text-xs text-zinc-400 font-mono">{atk.damage} | {atk.range}sq</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -396,7 +476,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
                                             {/* MP display */}
                                             {token && (
-                                                <div className="text-[10px] text-zinc-500">
+                                                <div className="text-xs text-zinc-500">
                                                     Move: {token.movementPoints.current}/{token.movementPoints.max}
                                                 </div>
                                             )}
@@ -418,32 +498,96 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
                         {showNpcForm && (
                             <div className="mt-2 flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="flex flex-col gap-0.5">
+                                        <span className="text-xs text-red-500/70 uppercase">Classe</span>
+                                        <select
+                                            value={selectedNpcClass}
+                                            onChange={e => {
+                                                const c = e.target.value;
+                                                setSelectedNpcClass(c);
+                                                if (NPC_CLASSES[c]) {
+                                                    const cls = NPC_CLASSES[c];
+                                                    const rank = NPC_RANKS[selectedNpcRank];
+                                                    setNpcForm(prev => ({
+                                                        ...prev,
+                                                        name: cls.name,
+                                                        combat: cls.combat + (rank?.combatMod || 0),
+                                                        hp: Math.floor(cls.hp * (rank?.hpMult || 1)),
+                                                        movementMax: cls.movementMax,
+                                                        icon: cls.icon,
+                                                        color: cls.color,
+                                                        attacks: cls.attacks
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono"
+                                        >
+                                            {Object.keys(NPC_CLASSES).map(k => <option key={k} value={k}>{k}</option>)}
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-0.5">
+                                        <span className="text-xs text-red-500/70 uppercase">Ranque</span>
+                                        <select
+                                            value={selectedNpcRank}
+                                            onChange={e => {
+                                                const r = e.target.value;
+                                                setSelectedNpcRank(r);
+                                                const cls = NPC_CLASSES[selectedNpcClass];
+                                                if (cls && NPC_RANKS[r]) {
+                                                    const rank = NPC_RANKS[r];
+                                                    setNpcForm(prev => ({
+                                                        ...prev,
+                                                        combat: cls.combat + rank.combatMod,
+                                                        hp: Math.floor(cls.hp * rank.hpMult),
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono"
+                                        >
+                                            {Object.keys(NPC_RANKS).map(k => <option key={k} value={k}>{NPC_RANKS[k].name}</option>)}
+                                        </select>
+                                    </label>
+                                </div>
+
                                 <input
                                     type="text"
                                     placeholder="Nome da Ameaça..."
                                     value={npcForm.name}
                                     onChange={e => setNpcForm(p => ({ ...p, name: e.target.value }))}
-                                    className="w-full bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-xs outline-none font-mono"
+                                    className="w-full bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono"
                                 />
 
                                 <div className="grid grid-cols-2 gap-2">
                                     <label className="flex flex-col gap-0.5">
-                                        <span className="text-[10px] text-red-500/70 uppercase">HP</span>
+                                        <span className="text-xs text-red-500/70 uppercase">HP</span>
                                         <input type="number" value={npcForm.hp}
                                             onChange={e => setNpcForm(p => ({ ...p, hp: Number(e.target.value), maxHp: Number(e.target.value) }))}
-                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs outline-none font-mono" />
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
                                     </label>
                                     <label className="flex flex-col gap-0.5">
-                                        <span className="text-[10px] text-red-500/70 uppercase">Iniciativa</span>
+                                        <span className="text-xs text-red-500/70 uppercase">Iniciativa</span>
                                         <input type="number" value={npcForm.initiative}
                                             onChange={e => setNpcForm(p => ({ ...p, initiative: Number(e.target.value) }))}
-                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs outline-none font-mono" />
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
+                                    </label>
+                                    <label className="flex flex-col gap-0.5">
+                                        <span className="text-xs text-red-500/70 uppercase">Combate</span>
+                                        <input type="number" value={npcForm.combat}
+                                            onChange={e => setNpcForm(p => ({ ...p, combat: Number(e.target.value) }))}
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
+                                    </label>
+                                    <label className="flex flex-col gap-0.5">
+                                        <span className="text-xs text-red-500/70 uppercase">Movimento</span>
+                                        <input type="number" value={npcForm.movementMax}
+                                            onChange={e => setNpcForm(p => ({ ...p, movementMax: Number(e.target.value) }))}
+                                            className="bg-zinc-900 border border-red-900/50 text-red-300 p-1.5 text-sm outline-none font-mono" />
                                     </label>
                                 </div>
 
                                 {/* Icon selector */}
                                 <div>
-                                    <span className="text-[10px] text-red-500/70 uppercase">Ícone</span>
+                                    <span className="text-xs text-red-500/70 uppercase">Ícone</span>
                                     <div className="flex flex-wrap gap-1 mt-1">
                                         {NPC_ICONS.map(icon => (
                                             <button key={icon} onClick={() => setNpcForm(p => ({ ...p, icon }))}
@@ -454,17 +598,9 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                     </div>
                                 </div>
 
-                                {/* Movement Max */}
-                                <label className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] text-red-500/70 uppercase">Movimento Máx.</span>
-                                    <input type="number" value={npcForm.movementMax}
-                                        onChange={e => setNpcForm(p => ({ ...p, movementMax: Number(e.target.value) }))}
-                                        className="bg-zinc-900 border border-red-900/50 text-red-300 p-1 text-xs outline-none font-mono" />
-                                </label>
-
                                 {/* Color selector */}
                                 <div>
-                                    <span className="text-[10px] text-red-500/70 uppercase">Cor do Token</span>
+                                    <span className="text-xs text-red-500/70 uppercase">Cor do Token</span>
                                     <div className="flex gap-1 mt-1 flex-wrap">
                                         {NPC_COLORS.map(c => (
                                             <button key={c.value} onClick={() => setNpcForm(p => ({ ...p, color: c.value }))}
@@ -476,26 +612,26 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
                                 {/* Attacks */}
                                 <div className="border-t border-red-900/30 pt-2">
-                                    <span className="text-[10px] text-red-500/70 uppercase font-bold">Ataques</span>
+                                    <span className="text-xs text-red-500/70 uppercase font-bold">Ataques</span>
                                     {npcForm.attacks.map((atk, i) => (
                                         <div key={i} className="flex items-center gap-1 mt-1">
-                                            <span className="text-[10px] text-red-300 flex-1 truncate font-mono">{atk.name} | {atk.damage} | {atk.range}sq</span>
-                                            <button onClick={() => handleRemoveAttack(i)} className="text-red-700 hover:text-red-400"><X size={10} /></button>
+                                            <span className="text-xs text-red-300 flex-1 truncate font-mono">{atk.name} | {atk.damage} | {atk.range}sq</span>
+                                            <button onClick={() => handleRemoveAttack(i)} className="text-red-700 hover:text-red-400"><X size={12} /></button>
                                         </div>
                                     ))}
                                     <div className="flex flex-col gap-1 mt-1">
                                         <input type="text" placeholder="Nome do ataque" value={newAttack.name}
                                             onChange={e => setNewAttack(p => ({ ...p, name: e.target.value }))}
-                                            className="bg-zinc-900 border border-red-900/30 text-red-300 p-1 text-xs outline-none font-mono" />
+                                            className="bg-zinc-900 border border-red-900/30 text-red-300 p-1.5 text-sm outline-none font-mono" />
                                         <div className="flex gap-1">
                                             <input type="text" placeholder="Dano (ex: 2d6)" value={newAttack.damage}
                                                 onChange={e => setNewAttack(p => ({ ...p, damage: e.target.value }))}
-                                                className="flex-1 bg-zinc-900 border border-red-900/30 text-red-300 p-1 text-xs outline-none font-mono" />
+                                                className="flex-1 bg-zinc-900 border border-red-900/30 text-red-300 p-1.5 text-sm outline-none font-mono" />
                                             <input type="number" placeholder="Alc" value={newAttack.range}
                                                 onChange={e => setNewAttack(p => ({ ...p, range: Number(e.target.value) }))}
-                                                className="w-10 bg-zinc-900 border border-red-900/30 text-red-300 p-1 text-xs outline-none font-mono" />
+                                                className="w-12 bg-zinc-900 border border-red-900/30 text-red-300 p-1.5 text-sm outline-none font-mono" />
                                             <button onClick={handleAddAttack}
-                                                className="bg-red-900/50 hover:bg-red-800 text-red-300 px-1 text-xs font-bold border border-red-800">+</button>
+                                                className="bg-red-900/50 hover:bg-red-800 text-red-300 px-2 text-sm font-bold border border-red-800">+</button>
                                         </div>
                                     </div>
                                 </div>

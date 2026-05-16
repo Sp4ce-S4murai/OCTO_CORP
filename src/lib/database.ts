@@ -248,7 +248,7 @@ export const endEncounter = async (roomId: string) => {
 
 export const addNPCToEncounter = async (
     roomId: string, 
-    npcData: { name: string; initiative: number; icon?: string; color: string; hp: number; maxHp: number; movementMax?: number; attacks?: NpcAttack[] }
+    npcData: { name: string; initiative: number; icon?: string; color: string; hp: number; maxHp: number; movementMax?: number; combat?: number; attacks?: NpcAttack[] }
 ) => {
     const npcId = `npc_${crypto.randomUUID()}`;
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
@@ -270,6 +270,7 @@ export const addNPCToEncounter = async (
         icon: npcData.icon || '👾',
         movementMax: movMax,
         isDead: false,
+        combat: npcData.combat || 45, // default 45
         attacks: npcData.attacks || [],
     };
     updates[`npcs/${npcId}`] = npcRecord;

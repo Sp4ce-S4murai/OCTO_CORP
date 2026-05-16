@@ -116,6 +116,7 @@ export interface NpcData {
     icon?: string;         // Emoji icon displayed on the grid token
     movementMax?: number;  // Max movement points (default 6)
     isDead?: boolean;      // True when HP reached 0 — token becomes a corpse
+    combat?: number;       // Base combat stat (chance to hit)
     attacks?: NpcAttack[];
 }
 
