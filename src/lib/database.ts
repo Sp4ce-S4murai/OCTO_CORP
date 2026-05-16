@@ -620,12 +620,6 @@ export const deleteGlobalItem = async (roomId: string, itemId: string) => {
     await remove(itemPath);
 };
 
-export const resetGlobalInventory = async (roomId: string) => {
-    const { GLOBAL_ITEMS } = await import('./itemsDictionary');
-    const invPath = ref(database, `${roomPath(roomId)}/globalInventory`);
-    await set(invPath, GLOBAL_ITEMS);
-};
-
 // --- NPC HP MANAGEMENT ---
 
 export const updateNpcData = async (roomId: string, npcId: string, data: Partial<NpcData>) => {

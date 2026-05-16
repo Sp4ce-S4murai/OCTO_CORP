@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, resetGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
+import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
 import { RoomData, CharacterSheet, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
@@ -543,22 +543,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
             {/* INVENTÁRIO GLOBAL */}
             <section className="bg-zinc-950/80 border border-emerald-900/50 p-6 flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold tracking-widest text-emerald-500 flex items-center gap-2 uppercase">
-                        <Package size={24} /> INVENTÁRIO GLOBAL E SUPRIMENTOS
-                    </h2>
-                    <button
-                        onClick={async () => {
-                            if(confirm("Deseja resetar o Almoxarifado para o novo padrão balanceado? Isso substituirá a lista atual de itens globais.")) {
-                                await resetGlobalInventory(roomId);
-                                alert("Almoxarifado resetado com sucesso!");
-                            }
-                        }}
-                        className="text-[10px] font-bold text-red-500/70 border border-red-900/50 px-3 py-1.5 hover:bg-red-950/40 transition-all flex items-center gap-2"
-                    >
-                        <Trash2 size={14} /> RESETAR DICIONÁRIO
-                    </button>
-                </div>
+                <h2 className="text-xl font-bold tracking-widest text-emerald-500 flex items-center gap-2 uppercase">
+                    <Package size={24} /> INVENTÁRIO GLOBAL E SUPRIMENTOS
+                </h2>
                 <div className="flex flex-wrap gap-4 items-end">
                     <div className="flex flex-col gap-1 w-64">
                         <label className="text-xs text-emerald-600 font-bold uppercase">SELECIONAR JOGADOR</label>
