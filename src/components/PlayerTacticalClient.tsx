@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Swords, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { subscribeToPlayer, subscribeToRoom, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested, updateNpcHp } from "@/lib/database";
 import { CharacterSheet, Weapon, RoomData } from "@/types/character";
+import { checkLineOfSight } from "@/lib/tacticalUtils";
 import { TacticalGrid } from "@/components/TacticalGrid";
 import { MiniSheet } from "@/components/MiniSheet";
 import { DiceCalculator } from "@/components/DiceCalculator";
@@ -89,9 +90,11 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             return;
         }
 
-        // Range check
+        // Range check & LOS check
         const myToken = roomData.encounter?.tokens?.[playerId];
         const targetToken = roomData.encounter?.tokens?.[targetId];
+        let losPenalty = 0;
+        
         if (myToken && targetToken) {
             const dist = chebyshevDist(myToken.x, myToken.y, targetToken.x, targetToken.y);
             if (dist > weapon.range) {
@@ -99,10 +102,19 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                 setTimeout(() => setAttackFeedback(null), 3000);
                 return;
             }
+
+            // LOS Check
+            const los = checkLineOfSight(myToken.x, myToken.y, targetToken.x, targetToken.y, encounter);
+            if (los.blocked) {
+                setAttackFeedback({ weaponName: weapon.name, result: "Alvo Bloqueado", detail: "Existe uma parede obstruindo sua linha de visão.", success: false });
+                setTimeout(() => setAttackFeedback(null), 3000);
+                return;
+            }
+            losPenalty = los.penalty;
         }
 
         // Roll to hit: d100 vs stat
-        const statValue = character.stats[weapon.baseStat] + weapon.bonus;
+        const statValue = Math.max(0, (character.stats[weapon.baseStat] + weapon.bonus) - losPenalty);
         const hitRoll = Math.floor(Math.random() * 100) + 1;
         const isCrit = hitRoll <= 5;
         const isHit = hitRoll <= statValue || isCrit;
@@ -134,7 +146,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             || roomData?.players?.[targetId]?.name
             || "Alvo";
 
-        const msg = `${result} | ${detail}${dmgDetail ? " | " + dmgDetail : ""}`;
+        const msg = `${result} | ${detail}${losPenalty > 0 ? ` | ALVO EM COBERTURA (-${losPenalty}%)` : ""}${dmgDetail ? " | " + dmgDetail : ""}`;
 
         pushLog(roomId, {
             timestamp: Date.now(),

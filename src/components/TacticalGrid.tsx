@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
 import { RoomData, EncounterState, Weapon, NpcAttack } from "@/types/character";
+import { checkLineOfSight } from "@/lib/tacticalUtils";
 import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
 
 interface TacticalGridProps {
@@ -45,6 +46,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [selectedNpcClass, setSelectedNpcClass] = useState<string>('Customizado');
     const [selectedNpcRank, setSelectedNpcRank] = useState<string>('Normal');
     const [showNpcForm, setShowNpcForm] = useState(false);
+    const [cloneTargetId, setCloneTargetId] = useState<string>('');
     const [newAttack, setNewAttack] = useState<NpcAttack>({ name: "", damage: "1d10", range: 1 });
     const [expandedNpc, setExpandedNpc] = useState<string | null>(null);
     // Warden: per-NPC damage controls { playerId, amount, attackIndex }
@@ -257,8 +259,31 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         let dmgDetail = "";
         let attackName = "Ataque Básico";
 
+        // Line of Sight & Cover check
+        const npcToken = tokens[npcId];
+        const targetToken = tokens[ctrl.playerId];
+        let losPenalty = 0;
+        
+        if (npcToken && targetToken) {
+            const los = checkLineOfSight(npcToken.x, npcToken.y, targetToken.x, targetToken.y, encounter || null);
+            if (los.blocked) {
+                pushLog(roomId, {
+                    timestamp: Date.now(),
+                    playerName: npc?.name || 'NPC',
+                    playerId: ctrl.playerId,
+                    statName: `ATAQUE BLOQUEADO`,
+                    statValue: 0,
+                    roll: 0,
+                    result: 'Failure',
+                    customMessage: `O ataque de ${(npc?.name || 'NPC').toUpperCase()} foi bloqueado por uma parede!`
+                });
+                return;
+            }
+            losPenalty = los.penalty;
+        }
+
         // To-Hit logic
-        const combatStat = npc.combat || 45;
+        const combatStat = Math.max(0, (npc.combat || 45) - losPenalty);
         const toHitRoll = Math.floor(Math.random() * 100) + 1;
         const tens = Math.floor(toHitRoll / 10);
         const ones = toHitRoll % 10;
@@ -328,6 +353,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         const result = await applyDamageToPlayer(roomId, ctrl.playerId, totalDmg);
 
         let logMsg = `Dano: ${totalDmg} ${dmgDetail}`;
+        if (losPenalty > 0) logMsg += ` | ALVO EM COBERTURA (-${losPenalty}%)`;
         if (result.armorDestroyed) logMsg += ` | ARMADURA DESTRUÍDA!`;
         logMsg += ` | HP Restante: ${result.newHealth}/${result.maxHealth}`;
         if (ctrl.attackIndex !== undefined) logMsg += ` | Rolou ${toHitRoll} vs CBT ${combatStat}`;
@@ -595,6 +621,39 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                         </select>
                                     </label>
                                 </div>
+
+                                {selectedNpcClass === 'Clone' && (
+                                    <label className="flex flex-col gap-0.5 mt-1 border-l-2 border-blue-900/50 pl-2">
+                                        <span className="text-[10px] text-blue-400 uppercase font-bold">Inimigo Clonado de:</span>
+                                        <select
+                                            value={cloneTargetId}
+                                            onChange={e => {
+                                                const pid = e.target.value;
+                                                setCloneTargetId(pid);
+                                                const player = roomData?.players?.[pid];
+                                                if (player) {
+                                                    const rank = NPC_RANKS[selectedNpcRank];
+                                                    setNpcForm(prev => ({
+                                                        ...prev,
+                                                        name: `Clone: ${player.name}`,
+                                                        combat: (player.stats?.combat || 45) + (rank?.combatMod || 0),
+                                                        hp: Math.floor((player.vitals?.health?.max || 20) * (rank?.hpMult || 1)),
+                                                        maxHp: Math.floor((player.vitals?.health?.max || 20) * (rank?.hpMult || 1)),
+                                                        icon: '👥',
+                                                        color: 'bg-zinc-600',
+                                                        attacks: []
+                                                    }));
+                                                }
+                                            }}
+                                            className="bg-zinc-900 border border-blue-900/50 text-blue-300 p-1.5 text-sm outline-none font-mono"
+                                        >
+                                            <option value="">Selecione um Jogador</option>
+                                            {Object.entries(roomData?.players || {}).map(([id, p]) => (
+                                                <option key={id} value={id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
 
                                 <input
                                     type="text"
