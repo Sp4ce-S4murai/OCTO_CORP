@@ -104,7 +104,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             }
 
             // LOS Check
-            const los = checkLineOfSight(myToken.x, myToken.y, targetToken.x, targetToken.y, encounter);
+            const los = checkLineOfSight(myToken.x, myToken.y, targetToken.x, targetToken.y, encounter || null);
             if (los.blocked) {
                 setAttackFeedback({ weaponName: weapon.name, result: "Alvo Bloqueado", detail: "Existe uma parede obstruindo sua linha de visão.", success: false });
                 setTimeout(() => setAttackFeedback(null), 3000);

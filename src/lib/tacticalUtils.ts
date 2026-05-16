@@ -39,7 +39,7 @@ export function getLineOfSightCells(x1: number, y1: number, x2: number, y2: numb
 /**
  * Checks if there is a clear line of sight and calculates cover penalties
  */
-export function checkLineOfSight(x1: number, y1: number, x2: number, y2: number, encounter: EncounterState | null): LOSResult {
+export function checkLineOfSight(x1: number, y1: number, x2: number, y2: number, encounter: EncounterState | null | undefined): LOSResult {
     if (!encounter) return { blocked: false, penalty: 0, cells: [] };
     
     const cells = getLineOfSightCells(x1, y1, x2, y2);
