@@ -1,7 +1,6 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
 import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
-import { BALANCED_WEAPONS } from "./itemPresets";
 import { roomPath, playerPath, logsPath, userProfilePath } from "./paths";
 
 
@@ -367,7 +366,12 @@ export const createEmptyCharacter = (id: string, name: string): CharacterSheet =
         skills: {
             trained: {}, expert: {}, master: {}
         },
-        inventory: BALANCED_WEAPONS
+        // Inventario nasce vazio de proposito: o kit inicial e concedido pelo
+        // ClassSelector no momento em que a classe e confirmada, que e onde a
+        // classe realmente existe (aqui ela e sempre o default 'Teamster').
+        // Antes isto entregava BALANCED_WEAPONS — as 7 armas do jogo de uma vez,
+        // e ainda por cima a mesma referencia de array para todo personagem.
+        inventory: []
     };
 };
 

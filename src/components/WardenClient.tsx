@@ -4,8 +4,8 @@ import Link from "next/link";
 
 
 import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
-import { RoomData, CharacterSheet, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
-import { STARTER_KITS } from "@/lib/itemsDictionary";
+import { RoomData, CharacterSheet, CharacterClass, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
+import { STARTER_KITS, getStarterKit, CLASS_LABELS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
@@ -580,7 +580,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                 {Object.values(roomData?.globalInventory || {}).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </optgroup>
                             <optgroup label="STARTER KITS">
-                                {Object.keys(STARTER_KITS).map(kit => <option key={kit} value={`kit:${kit}`}>{kit.toUpperCase()}</option>)}
+                                {(Object.keys(STARTER_KITS) as CharacterClass[]).map(cls => <option key={cls} value={`kit:${cls}`}>{CLASS_LABELS[cls].toUpperCase()}</option>)}
                             </optgroup>
                         </select>
                     </div>
@@ -600,9 +600,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             let itemsToGive: (Item | Weapon)[] = [];
                             let itemName = "";
                             if (selectedItemToGive.startsWith("kit:")) {
-                                const kitKey = selectedItemToGive.replace("kit:", "");
-                                itemsToGive = STARTER_KITS[kitKey];
-                                itemName = `Kit: ${kitKey.toUpperCase()}`;
+                                const kitClass = selectedItemToGive.replace("kit:", "") as CharacterClass;
+                                itemsToGive = getStarterKit(kitClass);
+                                itemName = `Kit: ${CLASS_LABELS[kitClass].toUpperCase()}`;
                             } else {
                                 const gItem = roomData?.globalInventory?.[selectedItemToGive];
                                 if (gItem) {

@@ -89,6 +89,13 @@ export interface CharacterSheet {
     consequences?: Consequence[]; // Entropy/Panic debuffs
     hasSpokenLastWords?: boolean; // True if the character already died and sent their final message
     inventory?: Item[]; // Players' items and weapons
+    /**
+     * Qual kit inicial ja foi concedido a este personagem. Existe para que
+     * trocar de classe no ClassSelector troque o kit em vez de acumular um
+     * novo por cima — e para que ajustar o atributo do Android/Cientista
+     * (que reaplica as mutacoes de classe) nao conceda nada de novo.
+     */
+    starterKit?: { characterClass: CharacterClass; itemIds: string[] };
     movementPoints?: { current: number; max: number }; // Tactical grid movement (optional, defaulted at runtime)
     selectedTargetId?: string; // ID of the currently targeted token
 }

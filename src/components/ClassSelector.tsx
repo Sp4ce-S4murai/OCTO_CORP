@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CharacterSheet, CharacterClass, Stats, Saves } from "@/types/character";
 import { updatePlayer } from "@/lib/database";
+import { CLASS_LABELS, computeStarterKitChange } from "@/lib/itemsDictionary";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -85,6 +86,13 @@ export function ClassSelector({ roomId, character }: Props) {
             }
         };
 
+        // Kit inicial: concedido aqui, na primeira vez que esta classe e
+        // confirmada. computeStarterKitChange devolve null se o kit desta
+        // classe ja foi dado, entao mexer no atributo do Android/Cientista
+        // (que reaplica as mutacoes) nao duplica nada.
+        const kitChange = computeStarterKitChange(character, cls);
+        if (kitChange) Object.assign(updatePayload, kitChange);
+
         await updatePlayer(roomId, character.id, updatePayload);
     };
 
@@ -128,10 +136,9 @@ export function ClassSelector({ roomId, character }: Props) {
                                 onChange={handleClassChange}
                                 className="bg-zinc-950 border border-emerald-800 text-emerald-300 p-2 outline-none focus:border-emerald-500"
                             >
-                                <option value="Teamster">Operador (Teamster)</option>
-                                <option value="Soldier">Soldado (Soldier)</option>
-                                <option value="Scientist">Cientista (Scientist)</option>
-                                <option value="Android">Androide (Android)</option>
+                                {(Object.keys(CLASS_LABELS) as CharacterClass[]).map(cls => (
+                                    <option key={cls} value={cls}>{CLASS_LABELS[cls]}</option>
+                                ))}
                             </select>
                         </label>
 
