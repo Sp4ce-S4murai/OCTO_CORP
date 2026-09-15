@@ -20,7 +20,6 @@ import {
   deleteUserCharacter,
   createEmptyCharacter,
   createTestRoom,
-  getTestRoomSeats,
   TestRoomSeed
 } from "../lib/database";
 import { isAdmin } from "../lib/admin";
@@ -61,7 +60,6 @@ export default function Home() {
   // Sala Teste (ADM)
   const [testRoom, setTestRoom] = useState<TestRoomSeed | null>(null);
   const [testLoading, setTestLoading] = useState(false);
-  const [popupsBlocked, setPopupsBlocked] = useState(false);
 
   const userIsAdmin = isAdmin(user?.email);
 
@@ -201,11 +199,6 @@ export default function Home() {
 
   // --- SALA TESTE (ADM) ---
 
-  const openSeats = (seed: TestRoomSeed) => {
-    const blocked = seed.seats.filter(seat => !window.open(seat.url, `teste_${seat.key}`));
-    setPopupsBlocked(blocked.length > 0);
-  };
-
   const handleCreateTestRoom = async () => {
     if (!confirm(
       `Isto APAGA a sala "TESTE" inteira e a recria com uma ficha por classe.
@@ -214,28 +207,12 @@ export default function Home() {
       `Salas de campanha nao sao afetadas. Continuar?`
     )) return;
 
-    // As janelas sao abertas AGORA, ainda dentro do gesto do clique. Depois de
-    // um await o navegador deixa de considerar isto uma acao do usuario e
-    // bloqueia todos os window.open menos o primeiro — era por isso que so uma
-    // aba abria. Elas comecam em branco e so recebem a URL depois que a sala
-    // existe, senao as fichas carregariam antes de serem semeadas e o
-    // PlayerSheetClient criaria personagens vazios por cima.
-    const seats = getTestRoomSeats();
-    const windows = seats.map(seat => window.open('about:blank', `teste_${seat.key}`));
-    setPopupsBlocked(windows.some(w => !w));
-
     setAuthError("");
     setTestLoading(true);
     try {
-      const seed = await createTestRoom();
-      setTestRoom(seed);
-      seed.seats.forEach((seat, i) => {
-        const w = windows[i];
-        if (w) w.location.href = seat.url;
-      });
+      setTestRoom(await createTestRoom());
     } catch (err: any) {
       setAuthError("Falha ao criar a Sala Teste: " + err.message);
-      windows.forEach(w => w?.close());
     } finally {
       setTestLoading(false);
     }
@@ -393,28 +370,14 @@ export default function Home() {
                       {testLoading ? "Semeando setor..." : "[ SALA TESTE ]"}
                     </button>
                     <span className="text-xs text-amber-700/80">
-                      Recria a sala TESTE do zero com uma ficha pronta por classe e abre uma aba para cada assento.
+                      Recria a sala TESTE do zero com uma ficha pronta por classe. Abra cada assento clicando nos links.
                     </span>
 
                     {testRoom && (
                       <div className="flex flex-col gap-2 border-t border-amber-900/40 pt-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-amber-600 uppercase tracking-widest font-bold">
-                            Setor {testRoom.roomId} // senha: {testRoom.password}
-                          </span>
-                          <button
-                            onClick={() => openSeats(testRoom)}
-                            className="text-xs text-amber-500 hover:text-amber-300 underline uppercase tracking-widest"
-                          >
-                            Reabrir abas
-                          </button>
-                        </div>
-
-                        {popupsBlocked && (
-                          <span className="text-xs text-red-400">
-                            O navegador bloqueou parte das abas. Libere popups para este site, ou abra os assentos um a um abaixo.
-                          </span>
-                        )}
+                        <span className="text-xs text-amber-600 uppercase tracking-widest font-bold">
+                          Setor {testRoom.roomId} // senha: {testRoom.password}
+                        </span>
 
                         <div className="grid grid-cols-1 gap-1">
                           {testRoom.seats.map(seat => (

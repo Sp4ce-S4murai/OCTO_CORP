@@ -1,3 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
+
 /**
  * Allowlist de ADM.
  *
@@ -18,4 +24,13 @@ export const ADMIN_EMAILS: string[] = (
 export function isAdmin(email: string | null | undefined): boolean {
     if (!email) return false;
     return ADMIN_EMAILS.includes(email.trim().toLowerCase());
+}
+
+/** Reage ao login: o Firebase Auth restaura a sessao de forma assincrona, entao
+ *  ler auth.currentUser na primeira renderizacao devolveria null e o ADM veria
+ *  a UI aparecer "piscando" depois. */
+export function useIsAdmin(): boolean {
+    const [admin, setAdmin] = useState(false);
+    useEffect(() => onAuthStateChanged(auth, u => setAdmin(isAdmin(u?.email))), []);
+    return admin;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { CharacterSheet } from "@/types/character";
-import { User, Eye, ChevronUp, ChevronDown, Activity } from "lucide-react";
+import { User, Eye, ChevronUp, ChevronDown, Activity, ExternalLink } from "lucide-react";
 import { HeartRateMonitor } from "./HeartRateMonitor";
 
 interface MiniSheetProps {
@@ -10,6 +10,8 @@ interface MiniSheetProps {
     onDamage?: (val: number) => void;
     onStress?: (val: number) => void;
     onInspect?: () => void;
+    /** URL da ficha na visao do jogador. Presente so para o ADM. */
+    playerViewUrl?: string;
     onMoveUp?: () => void;
     onMoveDown?: () => void;
     isFirst?: boolean;
@@ -17,7 +19,7 @@ interface MiniSheetProps {
     readOnly?: boolean;
 }
 
-export function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, onMoveUp, onMoveDown, isFirst, isLast, readOnly = false }: MiniSheetProps) {
+export function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, playerViewUrl, onMoveUp, onMoveDown, isFirst, isLast, readOnly = false }: MiniSheetProps) {
     const isDead = character.vitals.wounds.current >= character.vitals.wounds.max;
 
     const getAvatarFilterState = () => {
@@ -58,6 +60,20 @@ export function MiniSheet({ character, onUpdate, onDamage, onStress, onInspect, 
                         <button onClick={onInspect} className="text-[10px] px-2 py-1 uppercase ml-2 whitespace-nowrap bg-teal-950/80 text-teal-400 hover:bg-teal-900 border border-teal-900/50 transition-colors flex items-center gap-1 font-bold">
                             <Eye size={12} /> VER
                         </button>
+                    )}
+                    {/* Um clique = uma aba, que e o unico jeito que o navegador
+                        nunca trata como popup. Abrir varias de uma vez era o que
+                        fazia o Chrome bloquear. */}
+                    {!readOnly && playerViewUrl && (
+                        <a
+                            href={playerViewUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Abrir esta ficha na visao do jogador, em outra aba"
+                            className="text-[10px] px-2 py-1 uppercase ml-2 whitespace-nowrap bg-amber-950/80 text-amber-400 hover:bg-amber-900 border border-amber-900/50 transition-colors flex items-center gap-1 font-bold"
+                        >
+                            <ExternalLink size={12} /> JOGADOR
+                        </a>
                     )}
                 </div>
             </div>

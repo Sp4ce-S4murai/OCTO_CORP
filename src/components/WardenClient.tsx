@@ -18,6 +18,7 @@ import { GlobalInventoryEditor } from "./GlobalInventoryEditor";
 import { NPC_CLASSES, NPC_RANKS } from "@/lib/npcPresets";
 import { globalInventoryPath } from "@/lib/paths";
 import { useRoomSync, useComposedRoomData, useRoomStore } from "@/lib/roomStore";
+import { useIsAdmin } from "@/lib/admin";
 
 
 const getTimestamp = () => Date.now();
@@ -28,6 +29,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     // re-renderizando a qualquer mudanca da sala, como antes. O ganho ja
     // realizado e que os listeners agora sao compartilhados com o resto do app
     // em vez de duplicados por componente.
+    const isWardenAdmin = useIsAdmin();
     useRoomSync(roomId);
     const roomData = useComposedRoomData();
     const loading = !roomData;
@@ -1154,6 +1156,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                             onDamage={(dmg) => handleDamage(player.id, dmg)}
                             onStress={(amount) => handleStress(player.id, amount)}
                             onInspect={() => setSelectedPlayerId(player.id)}
+                            playerViewUrl={isWardenAdmin ? `/sala/${roomId}/jogador/${player.id}` : undefined}
                             onMoveUp={() => movePlayer(player.id, 'UP')}
                             onMoveDown={() => movePlayer(player.id, 'DOWN')}
                             isFirst={index === 0}
