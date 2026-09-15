@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { subscribeToRoom, updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
+import { updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
 import { RoomData, CharacterSheet, CharacterClass, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS, getStarterKit, CLASS_LABELS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
@@ -17,13 +17,20 @@ import { MiniSheet } from "./MiniSheet";
 import { GlobalInventoryEditor } from "./GlobalInventoryEditor";
 import { NPC_CLASSES, NPC_RANKS } from "@/lib/npcPresets";
 import { globalInventoryPath } from "@/lib/paths";
+import { useRoomSync, useComposedRoomData, useRoomStore } from "@/lib/roomStore";
 
 
 const getTimestamp = () => Date.now();
 
 export default function WardenClient({ roomId }: { roomId: string }) {
-    const [roomData, setRoomData] = useState<RoomData | null>(null);
-    const [loading, setLoading] = useState(true);
+    // TODO(Sessao B, parte 2): migrar este componente para ler fatias do store.
+    // Por enquanto ele recompoe o RoomData inteiro — ou seja, continua
+    // re-renderizando a qualquer mudanca da sala, como antes. O ganho ja
+    // realizado e que os listeners agora sao compartilhados com o resto do app
+    // em vez de duplicados por componente.
+    useRoomSync(roomId);
+    const roomData = useComposedRoomData();
+    const loading = !roomData;
     const [wardenMessage, setWardenMessage] = useState("");
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
@@ -80,7 +87,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
 
         updatePlayerOrder(roomId, newOrder);
-        setRoomData((prev: RoomData | null) => prev ? { ...prev, playerOrder: newOrder } : prev);
+        // Atualizacao otimista: sem isto a lista so reordena quando o eco do
+        // Firebase volta, e o arrasto fica com lag visivel na mesa.
+        useRoomStore.setState({ playerOrder: newOrder });
     };
 
     const handleStartCombat = () => {
@@ -169,10 +178,6 @@ export default function WardenClient({ roomId }: { roomId: string }) {
 
     useEffect(() => {
         initializeGlobalInventory(roomId);
-        const unsubscribe = subscribeToRoom(roomId, (data) => {
-            setRoomData(data);
-            setLoading(false);
-        });
 
         const handlePaste = (e: ClipboardEvent) => {
             // Ignore if typing in an input/textarea
@@ -194,7 +199,6 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         window.addEventListener("paste", handlePaste);
 
         return () => {
-            unsubscribe();
             window.removeEventListener("paste", handlePaste);
         };
     }, [roomId]);

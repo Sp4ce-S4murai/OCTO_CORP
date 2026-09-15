@@ -1,23 +1,12 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
-import { CharacterSheet, CharacterClass, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
+import { CharacterSheet, CharacterClass, RollLog, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
 import { applyClassToCharacter } from "./characterClass";
 import { CLASS_LABELS } from "./itemsDictionary";
 import { roomPath, playerPath, logsPath, userProfilePath } from "./paths";
 
 
 // Caminhos vem de lib/paths.ts — ver o namespace v2_ documentado la.
-
-// Generic subscription hook logic to be used inside React
-export const subscribeToRoom = (
-    roomId: string,
-    callback: (data: RoomData | null) => void
-) => {
-    const roomRef = ref(database, roomPath(roomId));
-    return onValue(roomRef, (snapshot) => {
-        callback(snapshot.val());
-    });
-};
 
 export const subscribeToPlayer = (
     roomId: string,

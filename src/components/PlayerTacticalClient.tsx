@@ -3,13 +3,14 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Swords, Target, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { subscribeToPlayer, subscribeToRoom, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested, updateNpcHp } from "@/lib/database";
+import { subscribeToPlayer, createEmptyCharacter, createPlayer, pushLog, updatePlayerNested, updateNpcHp } from "@/lib/database";
 import { CharacterSheet, Weapon, RoomData } from "@/types/character";
 import { checkLineOfSight } from "@/lib/tacticalUtils";
 import { TacticalGrid } from "@/components/TacticalGrid";
 import { MiniSheet } from "@/components/MiniSheet";
 import { DiceCalculator } from "@/components/DiceCalculator";
 import { encounterPath } from "@/lib/paths";
+import { useRoomStore, useRoomSync } from "@/lib/roomStore";
 
 // Roll a dice expression like "2d6+3"
 function rollDice(expr: string): { total: number; detail: string } {
@@ -38,7 +39,11 @@ interface AttackFeedback {
 
 export default function PlayerTacticalClient({ roomId, playerId }: { roomId: string; playerId: string }) {
     const [character, setCharacter] = useState<CharacterSheet | null>(null);
-    const [roomData, setRoomData] = useState<RoomData | null>(null);
+    // Fatias em vez da sala inteira: esta tela so precisa do encontro e das
+    // fichas alheias para resolver alvo, alcance e linha de visao.
+    useRoomSync(roomId);
+    const encounter = useRoomStore(s => s.encounter);
+    const players = useRoomStore(s => s.players);
     const [loading, setLoading] = useState(true);
     const [attackFeedback, setAttackFeedback] = useState<AttackFeedback | null>(null);
     const [showDice, setShowDice] = useState(false);
@@ -67,14 +72,12 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             }
             setLoading(false);
         });
-        const unsub2 = subscribeToRoom(roomId, setRoomData);
-        return () => { unsub1(); unsub2(); };
+        return () => { unsub1(); };
     }, [roomId, playerId]);
 
     const handleAttack = (weapon: Weapon) => {
-        if (!character || !roomData) return;
+        if (!character || !encounter) return;
 
-        const encounter = roomData.encounter;
         if (encounter?.isActive) {
             const isMyTurn = encounter.status === 'active' && encounter.turnOrder[encounter.currentTurnIndex] === playerId;
             if (!isMyTurn) {
@@ -92,8 +95,8 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
         }
 
         // Range check & LOS check
-        const myToken = roomData.encounter?.tokens?.[playerId];
-        const targetToken = roomData.encounter?.tokens?.[targetId];
+        const myToken = encounter?.tokens?.[playerId];
+        const targetToken = encounter?.tokens?.[targetId];
         let losPenalty = 0;
         
         if (myToken && targetToken) {
@@ -133,7 +136,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
 
             // Apply damage to NPC if target is an NPC
             if (targetId.startsWith('npc_')) {
-                const targetNpc = roomData?.encounter?.npcs?.[targetId];
+                const targetNpc = encounter?.npcs?.[targetId];
                 if (targetNpc) {
                     const newHp = Math.max(0, targetNpc.hp - finalDmg);
                     updateNpcHp(roomId, targetId, newHp);
@@ -143,8 +146,8 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
             result = "❌ ERROU!";
         }
 
-        const targetName = roomData?.encounter?.npcs?.[targetId]?.name
-            || roomData?.players?.[targetId]?.name
+        const targetName = encounter?.npcs?.[targetId]?.name
+            || players?.[targetId]?.name
             || "Alvo";
 
         const msg = `${result} | ${detail}${losPenalty > 0 ? ` | ALVO EM COBERTURA (-${losPenalty}%)` : ""}${dmgDetail ? " | " + dmgDetail : ""}`;
@@ -188,7 +191,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
     const gear = (character.inventory || []).filter(i => i.type !== 'weapon');
     const targetId = character.selectedTargetId;
     const targetName = targetId
-        ? (roomData?.encounter?.npcs?.[targetId]?.name || roomData?.players?.[targetId]?.name || "Alvo")
+        ? (encounter?.npcs?.[targetId]?.name || players?.[targetId]?.name || "Alvo")
         : null;
 
     return (
@@ -283,8 +286,8 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
                                             // Check range if we have tokens
                                             let inRange = true;
                                             if (hasTarget) {
-                                                const myToken = roomData?.encounter?.tokens?.[playerId];
-                                                const targetToken = roomData?.encounter?.tokens?.[targetId!];
+                                                const myToken = encounter?.tokens?.[playerId];
+                                                const targetToken = encounter?.tokens?.[targetId!];
                                                 if (myToken && targetToken) {
                                                     const dist = chebyshevDist(myToken.x, myToken.y, targetToken.x, targetToken.y);
                                                     inRange = dist <= w.range;

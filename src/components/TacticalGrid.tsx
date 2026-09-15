@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { subscribeToRoom, updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
-import { RoomData, EncounterState, Weapon, NpcAttack } from "@/types/character";
+import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
+import { EncounterState, Weapon, NpcAttack } from "@/types/character";
+import { useRoomStore, useRoomSync } from "@/lib/roomStore";
 import { checkLineOfSight } from "@/lib/tacticalUtils";
 import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
 
@@ -41,7 +42,12 @@ const EMPTY_NPC_FORM = {
 };
 
 export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) {
-    const [roomData, setRoomData] = useState<RoomData | null>(null);
+    // Fatias do store em vez de um onValue na sala inteira: mover um token
+    // deixa de re-renderizar por causa de uma mudanca em /ship ou /logs.
+    useRoomSync(roomId);
+    const encounter = useRoomStore(s => s.encounter);
+    const players = useRoomStore(s => s.players);
+    const connected = useRoomStore(s => s.connected);
     const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
     const [npcForm, setNpcForm] = useState({ ...EMPTY_NPC_FORM });
     const [selectedNpcClass, setSelectedNpcClass] = useState<string>('Customizado');
@@ -91,12 +97,6 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         reader.readAsText(file);
     };
 
-    useEffect(() => {
-        const unsub = subscribeToRoom(roomId, (data) => setRoomData(data));
-        return () => unsub();
-    }, [roomId]);
-
-    const encounter = roomData?.encounter;
     const gridSize = encounter?.gridSize || 20;
     const tokens = encounter?.tokens || {};
     const npcs = encounter?.npcs || {};
@@ -110,12 +110,12 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     const [showPopupId, setShowPopupId] = useState<number | null>(null);
 
     useEffect(() => {
-        if (roomData?.encounter?.lastAttackEvent?.id) {
-            setShowPopupId(roomData.encounter.lastAttackEvent.id);
+        if (encounter?.lastAttackEvent?.id) {
+            setShowPopupId(encounter.lastAttackEvent.id);
             const timer = setTimeout(() => setShowPopupId(null), 5000);
             return () => clearTimeout(timer);
         }
-    }, [roomData?.encounter?.lastAttackEvent?.id]);
+    }, [encounter?.lastAttackEvent?.id]);
 
     const getTokenMaxRange = (tId: string) => {
         if (tId.startsWith('npc_')) {
@@ -125,7 +125,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             }
             return 1;
         }
-        const char = roomData?.players?.[tId];
+        const char = players?.[tId];
         if (!char || !char.inventory) return 0;
         const weapons = char.inventory.filter(i => i.type === 'weapon') as Weapon[];
         if (weapons.length === 0) return 1;
@@ -149,7 +149,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     deductTokenMovement(roomId, playerId!, dist);
                 }
             } else {
-                const maxMp = roomData?.players?.[playerId!]?.movementPoints?.max || 6;
+                const maxMp = players?.[playerId!]?.movementPoints?.max || 6;
                 updateTokenPosition(roomId, playerId!, x, y, 'bg-emerald-500', maxMp);
             }
             return;
@@ -188,7 +188,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             setSelectedTokenId(prev => prev === tokenId ? null : tokenId);
         } else {
             if (tokenId !== playerId && playerId) {
-                const currentTarget = roomData?.players?.[playerId]?.selectedTargetId;
+                const currentTarget = players?.[playerId]?.selectedTargetId;
                 updatePlayerNested(roomId, playerId, "selectedTargetId", currentTarget === tokenId ? null : tokenId);
             }
         }
@@ -253,7 +253,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         const ctrl = npcDmgControls[npcId];
         if (!ctrl?.playerId) return;
         const npc = npcs[npcId];
-        const target = roomData?.players?.[ctrl.playerId];
+        const target = players?.[ctrl.playerId];
         if (!target) return;
 
         let totalDmg = 0;
@@ -406,7 +406,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
     };
 
-    if (!roomData) return <div className="text-emerald-500 font-mono p-4 animate-pulse">Carregando Malha Tática...</div>;
+    if (!connected) return <div className="text-emerald-500 font-mono p-4 animate-pulse">Carregando Malha Tática...</div>;
 
     return (
         <div className="flex w-full h-full overflow-hidden bg-black">
@@ -489,7 +489,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                             </div>
 
                                             {/* Attack player panel */}
-                                            {!npc.isDead && roomData?.players && Object.keys(roomData.players).length > 0 && (
+                                            {!npc.isDead && Object.keys(players).length > 0 && (
                                                 <div className="bg-red-950/20 border border-red-900/30 p-2 flex flex-col gap-1.5">
                                                     <span className="text-xs text-red-400 font-bold uppercase flex items-center gap-1">
                                                         <Swords size={12}/> Atacar Jogador
@@ -501,7 +501,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                                             onChange={e => setNpcDmgControls(prev => ({ ...prev, [npc.id]: { ...( prev[npc.id] || { amount: 5 }), playerId: e.target.value } }))}
                                                         >
                                                             <option value="">-- Alvo --</option>
-                                                            {Object.values(roomData.players).map(p => (
+                                                            {Object.values(players).map(p => (
                                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                                             ))}
                                                         </select>
@@ -631,7 +631,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                             onChange={e => {
                                                 const pid = e.target.value;
                                                 setCloneTargetId(pid);
-                                                const player = roomData?.players?.[pid];
+                                                const player = players?.[pid];
                                                 if (player) {
                                                     const rank = NPC_RANKS[selectedNpcRank];
                                                     setNpcForm(prev => ({
@@ -649,7 +649,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                             className="bg-zinc-900 border border-blue-900/50 text-blue-300 p-1.5 text-sm outline-none font-mono"
                                         >
                                             <option value="">Selecione um Jogador</option>
-                                            {Object.entries(roomData?.players || {}).map(([id, p]) => (
+                                            {Object.entries(players).map(([id, p]) => (
                                                 <option key={id} value={id}>{p.name}</option>
                                             ))}
                                         </select>
@@ -806,7 +806,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 const isActive = idx === encounter.currentTurnIndex;
                                 const isNpc = id.startsWith('npc_');
                                 const npcEntry = npcs[id];
-                                const playerEntry = roomData?.players?.[id];
+                                const playerEntry = players?.[id];
                                 const label = isNpc ? (npcEntry?.name || 'NPC') : (playerEntry?.name || id);
                                 const icon = isNpc ? (npcEntry?.isDead ? '💀' : (npcEntry?.icon || '👾')) : null;
                                 const isMeTurn = !isWarden && id === playerId;
@@ -907,9 +907,9 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     {/* Tokens */}
                     {Object.entries(tokens).map(([id, token]) => {
                         const isSelectedByWarden = selectedTokenId === id;
-                        const isPlayerToken = !!roomData.players?.[id];
+                        const isPlayerToken = !!players?.[id];
                         const isNpc = id.startsWith('npc_');
-                        const isTargeted = !isWarden && playerId && roomData.players?.[playerId]?.selectedTargetId === id;
+                        const isTargeted = !isWarden && playerId && players?.[playerId]?.selectedTargetId === id;
                         const npcData = isNpc ? npcs[id] : null;
                         const isCorpse = isNpc && (npcData?.isDead || (npcData?.hp ?? 1) <= 0);
 
@@ -946,7 +946,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 ) : isNpc ? (
                                     <span className="text-xl z-10">{npcData?.icon || '👾'}</span>
                                 ) : (
-                                    <span className="z-10 text-[11px]">{roomData.players[id]?.name.substring(0, 2).toUpperCase() || '??'}</span>
+                                    <span className="z-10 text-[11px]">{players[id]?.name.substring(0, 2).toUpperCase() || '??'}</span>
                                 )}
 
                                 {/* HP bar under NPC token */}
@@ -983,19 +983,19 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             </div> {/* end grid area flex-col */}
 
             {/* GLOBAL ATTACK POPUP */}
-            {roomData?.encounter?.lastAttackEvent && showPopupId === roomData.encounter.lastAttackEvent.id && (
-                <div key={roomData.encounter.lastAttackEvent.id} className="absolute inset-x-0 top-1/4 z-[500] pointer-events-none flex justify-center animate-in fade-in slide-in-from-top-10 zoom-in duration-300">
+            {encounter?.lastAttackEvent && showPopupId === encounter.lastAttackEvent.id && (
+                <div key={encounter.lastAttackEvent.id} className="absolute inset-x-0 top-1/4 z-[500] pointer-events-none flex justify-center animate-in fade-in slide-in-from-top-10 zoom-in duration-300">
                     <div className="bg-zinc-950/90 border-2 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.5)] p-6 max-w-lg w-full flex flex-col items-center gap-3 backdrop-blur-md">
                         <Swords size={48} className="text-red-500 animate-pulse" />
                         <div className="text-center">
-                            <span className="text-red-400 font-bold uppercase tracking-widest text-lg block">{roomData.encounter.lastAttackEvent.attacker} atacou {roomData.encounter.lastAttackEvent.target}</span>
-                            <span className="text-zinc-300 font-mono text-sm block mt-1">Arma: {roomData.encounter.lastAttackEvent.weapon}</span>
+                            <span className="text-red-400 font-bold uppercase tracking-widest text-lg block">{encounter.lastAttackEvent.attacker} atacou {encounter.lastAttackEvent.target}</span>
+                            <span className="text-zinc-300 font-mono text-sm block mt-1">Arma: {encounter.lastAttackEvent.weapon}</span>
                         </div>
                         <div className="bg-red-950/50 border border-red-900/50 w-full p-3 text-center mt-2">
-                            {roomData.encounter.lastAttackEvent.success ? (
+                            {encounter.lastAttackEvent.success ? (
                                 <>
-                                    <span className="text-red-500 font-black text-2xl tracking-widest uppercase animate-pulse">CAUSANDO {roomData.encounter.lastAttackEvent.damage} DE DANO</span>
-                                    <span className="text-[10px] text-zinc-400 block mt-1 italic">{roomData.encounter.lastAttackEvent.message}</span>
+                                    <span className="text-red-500 font-black text-2xl tracking-widest uppercase animate-pulse">CAUSANDO {encounter.lastAttackEvent.damage} DE DANO</span>
+                                    <span className="text-[10px] text-zinc-400 block mt-1 italic">{encounter.lastAttackEvent.message}</span>
                                 </>
                             ) : (
                                 <span className="text-zinc-500 font-bold uppercase tracking-widest">ATAQUE FALHOU</span>
