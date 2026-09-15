@@ -7,6 +7,7 @@ import { CharacterSheet, GridObstacle, GridToken, NpcData } from "@/types/charac
 import {
     TILE_W, TILE_H, gridToScreen, screenToCell, diamondPoints,
     boardOffset, boardPixelSize, depth, tailwindToHex,
+    cubeFaces, shade, obstacleHeight,
 } from "@/lib/isoUtils";
 
 export interface IsometricGridProps {
@@ -103,11 +104,15 @@ export default function IsometricGrid(props: IsometricGridProps) {
             didDrag.current = false;
             return;
         }
-        // Tokens tratam o proprio clique; aqui so chegam cliques no chao.
-        // O alvo do evento e a forma interna (o pino, a base), nao o Group —
-        // por isso a checagem tem que subir a arvore, senao clicar num inimigo
-        // para mira-lo disparava tambem o clique de chao e movia o token.
+        // Tokens e blocos tratam o proprio clique; aqui so chegam cliques no
+        // chao vazio. O alvo do evento e a forma interna (o pino, uma face do
+        // cubo), nao o Group nomeado, por isso a checagem sobe a arvore.
+        //
+        // Sem isto o clique valia duas vezes: mirar um inimigo movia o token
+        // para cima dele, e apagar uma parede com a borracha pintava outra na
+        // casa atras, porque o topo do cubo e desenhado uma casa acima.
         if (e.target.findAncestor(".token", true)) return;
+        if (e.target.findAncestor(".obstacle", true)) return;
         const stage = e.target.getStage();
         if (!stage) return;
         const cell = pointerToCell(stage);
@@ -154,10 +159,12 @@ export default function IsometricGrid(props: IsometricGridProps) {
     // convertendo a posicao do ponteiro em celula. Com listeners por celula, um
     // mapa 100x100 teria 10 mil alvos de hit-test.
     const cells = useMemo(() => {
-        const obsByCell = new Map<string, GridObstacle>();
-        Object.values(obstacles || {}).forEach(o =>
-            obsByCell.set(`${Number(o.x)},${Number(o.y)}`, o)
-        );
+        // So o chao. Obstaculos com volume sao desenhados junto dos tokens,
+        // para poderem ser ordenados por profundidade entre si.
+        const hazards = new Map<string, GridObstacle>();
+        Object.values(obstacles || {}).forEach(o => {
+            if (obstacleHeight(o.type) <= 0) hazards.set(`${Number(o.x)},${Number(o.y)}`, o);
+        });
 
         const pts = diamondPoints();
         const out: React.ReactElement[] = [];
@@ -165,7 +172,6 @@ export default function IsometricGrid(props: IsometricGridProps) {
         for (let y = 0; y < gridSize; y++) {
             for (let x = 0; x < gridSize; x++) {
                 const s = gridToScreen(x, y);
-                const obs = obsByCell.get(`${x},${y}`);
 
                 let fill = "#0a0f0d";
                 let stroke = "rgba(16,185,129,0.14)";
@@ -181,8 +187,10 @@ export default function IsometricGrid(props: IsometricGridProps) {
                     }
                 }
 
-                if (obs) {
-                    fill = tailwindToHex(obs.color);
+                // Perigo e marcacao de chao, nao bloco: fica rente ao piso.
+                const hazard = hazards.get(`${x},${y}`);
+                if (hazard) {
+                    fill = tailwindToHex(hazard.color);
                     stroke = "#000";
                 }
 
@@ -196,7 +204,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
                         fill={fill}
                         stroke={stroke}
                         strokeWidth={1}
-                        opacity={obs?.type === "cover" ? 0.7 : 1}
+                        opacity={hazard ? 0.6 : 1}
                         listening={false}
                         perfectDrawEnabled={false}
                     />
@@ -206,11 +214,63 @@ export default function IsometricGrid(props: IsometricGridProps) {
         return out;
     }, [gridSize, obstacles, activeToken, activeTokenMaxRange, canHighlight]);
 
-    const tokenNodes = useMemo(() => {
-        return Object.entries(tokens || {})
-            // Quem esta mais a frente no tabuleiro cobre quem esta atras.
-            .sort(([, a], [, b]) => depth(a.x, a.y) - depth(b.x, b.y))
-            .map(([id, token]) => {
+    /**
+     * Blocos e tokens saem na mesma lista, ordenados por profundidade: uma
+     * parede a frente precisa cobrir quem esta atras dela, o que e impossivel
+     * se as paredes forem todas desenhadas antes de todos os tokens.
+     */
+    const scenery = useMemo(() => {
+        type Prop = { key: string; d: number; tie: number; node: React.ReactElement };
+        const props: Prop[] = [];
+
+        Object.values(obstacles || {}).forEach(o => {
+            const h = obstacleHeight(o.type);
+            if (h <= 0) return; // perigo ja foi desenhado no chao
+            const x = Number(o.x);
+            const y = Number(o.y);
+            const s = gridToScreen(x, y);
+            const c = tailwindToHex(o.color);
+            const f = cubeFaces(h);
+
+            props.push({
+                key: `o${o.id}`,
+                d: depth(x, y),
+                tie: 0,
+                node: (
+                    <Group
+                        key={`o${o.id}`}
+                        x={s.x}
+                        y={s.y}
+                        name="obstacle"
+                        // Clicar no bloco vale pela celula DELE. Sem isto o clique
+                        // cairia onde o topo do cubo foi desenhado — uma casa atras —
+                        // e a borracha apagaria a parede errada.
+                        onClick={() => onCellClick(x, y)}
+                        onTap={() => onCellClick(x, y)}
+                    >
+                        <Line points={f.left} closed fill={shade(c, 0.55)} stroke="#000" strokeWidth={1} perfectDrawEnabled={false} />
+                        <Line points={f.right} closed fill={shade(c, 0.78)} stroke="#000" strokeWidth={1} perfectDrawEnabled={false} />
+                        <Line points={f.top} closed fill={c} stroke="#000" strokeWidth={1} perfectDrawEnabled={false} />
+                    </Group>
+                ),
+            });
+        });
+
+        Object.entries(tokens || {}).forEach(([id, token]) => {
+            props.push({
+                key: id,
+                d: depth(token.x, token.y),
+                tie: 1, // token fica na frente de bloco na mesma casa
+                node: renderToken(id, token),
+            });
+        });
+
+        props.sort((a, b) => a.d - b.d || a.tie - b.tie);
+        return props.map(p => p.node);
+    }, [tokens, obstacles, npcs, players, currentTurnId, selectedTokenId, targetedTokenId, onTokenClick, onCellClick]);
+
+    function renderToken(id: string, token: GridToken) {
+        {
                 const s = gridToScreen(token.x, token.y);
                 const isNpc = id.startsWith("npc_");
                 const npc = isNpc ? npcs?.[id] : null;
@@ -303,8 +363,8 @@ export default function IsometricGrid(props: IsometricGridProps) {
                         )}
                     </Group>
                 );
-            });
-    }, [tokens, npcs, players, currentTurnId, selectedTokenId, targetedTokenId, onTokenClick]);
+        }
+    }
 
     return (
         <div ref={wrapperRef} className="w-full h-full relative bg-black touch-none">
@@ -327,7 +387,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
                 <Layer>
                     <Group ref={groupRef} x={offset.x} y={offset.y}>
                         {cells}
-                        {tokenNodes}
+                        {scenery}
                     </Group>
                 </Layer>
             </Stage>

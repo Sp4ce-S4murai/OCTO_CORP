@@ -71,6 +71,7 @@ export function depth(x: number, y: number): number {
  * traduzir aqui e mais barato do que migrar os dados.
  */
 const TAILWIND_HEX: Record<string, string> = {
+    // paleta de tokens/NPC
     'bg-red-500': '#ef4444',
     'bg-orange-500': '#f97316',
     'bg-purple-500': '#a855f7',
@@ -81,7 +82,18 @@ const TAILWIND_HEX: Record<string, string> = {
     'bg-emerald-400': '#34d399',
     'bg-blue-500': '#3b82f6',
     'bg-zinc-600': '#52525b',
+    // paleta do editor de mapa (TacticalGrid > MODO EDITOR)
     'bg-zinc-700': '#3f3f46',
+    'bg-zinc-400': '#a1a1aa',
+    'bg-red-600': '#dc2626',
+    'bg-amber-600': '#d97706',
+    'bg-yellow-500': '#eab308',
+    'bg-blue-600': '#2563eb',
+    'bg-emerald-600': '#059669',
+    'bg-purple-600': '#9333ea',
+    'bg-indigo-600': '#4f46e5',
+    'bg-rose-600': '#e11d48',
+    // usadas por presets e por dados antigos
     'bg-zinc-800': '#27272a',
     'bg-stone-600': '#57534e',
     'bg-amber-700': '#b45309',
@@ -91,4 +103,47 @@ export function tailwindToHex(cls: string | undefined, fallback = '#52525b'): st
     if (!cls) return fallback;
     if (cls.startsWith('#')) return cls;
     return TAILWIND_HEX[cls] ?? fallback;
+}
+
+/**
+ * Faces de um bloco isometrico erguido sobre a celula, com altura `h`.
+ *
+ * Losango flat nao distingue parede de cobertura — as duas viravam a mesma
+ * mancha colorida. Com volume, parede vira cubo inteiro e cobertura meio
+ * cubo, que e a leitura que a mesa espera.
+ */
+export function cubeFaces(h: number, tileW = TILE_W, tileH = TILE_H) {
+    const hw = tileW / 2;
+    const hh = tileH / 2;
+    return {
+        // Topo: o mesmo losango, erguido em h.
+        top: [0, -hh - h, hw, -h, 0, hh - h, -hw, -h],
+        // Face voltada para baixo-esquerda.
+        left: [-hw, 0, 0, hh, 0, hh - h, -hw, -h],
+        // Face voltada para baixo-direita.
+        right: [0, hh, hw, 0, hw, -h, 0, hh - h],
+    };
+}
+
+/** Escurece/clareia um hex, para dar sombreamento as faces do bloco. */
+export function shade(hex: string, factor: number): string {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+        .map(c => Math.max(0, Math.min(255, Math.round(c * factor))));
+    return `#${ch.map(c => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Altura do bloco por tipo de obstaculo, em pixels.
+ *
+ * Num tile isometrico 2:1 a aresta vertical de um cubo perfeito mede tileW/2,
+ * que aqui e igual a TILE_H. Usar o dobro disso deixava a parede alta demais e
+ * escondia por completo qualquer token atras dela.
+ */
+export function obstacleHeight(type: string, tileH = TILE_H): number {
+    if (type === 'hazard') return 0;         // perigo de chao, sem volume
+    if (type === 'cover') return tileH / 2;  // meio bloco
+    return tileH;                            // parede e porta: cubo inteiro
 }
