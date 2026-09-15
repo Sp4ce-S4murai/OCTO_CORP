@@ -1,19 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, updateNpcData, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
-import { EncounterState, Weapon, NpcAttack } from "@/types/character";
+import dynamic from "next/dynamic";
+import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
+import { Weapon, NpcAttack } from "@/types/character";
 import { useRoomStore, useRoomSync } from "@/lib/roomStore";
+
+// konva acessa `window` ja no import, entao este componente nao pode participar
+// do render do servidor.
+const IsometricGrid = dynamic(() => import("./IsometricGrid"), {
+    ssr: false,
+    loading: () => <div className="w-full h-full flex items-center justify-center text-emerald-700 animate-pulse font-mono text-sm">Projetando malha...</div>,
+});
 import { checkLineOfSight } from "@/lib/tacticalUtils";
-import { Trash2, Target, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
+import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
 
 interface TacticalGridProps {
     roomId: string;
     playerId?: string;
     isWarden?: boolean;
 }
-
-const CELL_SIZE = 40;
 
 const NPC_COLORS = [
     { label: "Vermelho", value: "bg-red-500" },
@@ -182,8 +188,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
     };
 
-    const handleTokenClick = (e: React.MouseEvent, tokenId: string) => {
-        e.stopPropagation();
+    const handleTokenClick = (tokenId: string) => {
         if (isWarden) {
             setSelectedTokenId(prev => prev === tokenId ? null : tokenId);
         } else {
@@ -194,8 +199,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         }
     };
 
-    const handleRemoveToken = (e: React.MouseEvent, tokenId: string) => {
-        e.stopPropagation();
+    const handleRemoveToken = (tokenId: string) => {
         if (isWarden) {
             removeTokenFromGrid(roomId, tokenId);
             setSelectedTokenId(null);
@@ -851,135 +855,48 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     </div>
                 )}
 
-                {/* Grid canvas */}
-                <div className="flex-1 overflow-auto p-4 flex items-center justify-center relative scanline-overlay bg-black">
-                <div
-                    className="grid bg-zinc-950/50 border-2 border-emerald-900/50 relative shadow-[0_0_50px_rgba(16,185,129,0.1)] mx-auto my-auto"
-                    style={{
-                        gridTemplateColumns: `repeat(${gridSize}, ${CELL_SIZE}px)`,
-                        gridTemplateRows: `repeat(${gridSize}, ${CELL_SIZE}px)`,
-                        width: `${gridSize * CELL_SIZE}px`,
-                        height: `${gridSize * CELL_SIZE}px`
-                    }}
-                >
-                    {Array.from({ length: gridSize * gridSize }).map((_, i) => {
-                        const x = i % gridSize;
-                        const y = Math.floor(i / gridSize);
-                        let isMovable = false;
-                        let isAttackable = false;
-                        
-                        // Use values for more robust lookup with Number conversion
-                        const obs = Object.values(encounter?.obstacles || {}).find(o => Number(o.x) === x && Number(o.y) === y);
-
-                        // Only show movement range when it's the player's own turn (or warden)
-                        const canHighlight = isWarden || isMyTurn;
-
-                        if (activeToken && canHighlight) {
-                            const dist = Math.max(Math.abs(activeToken.x - x), Math.abs(activeToken.y - y));
-                            if (dist > 0 && dist <= activeToken.movementPoints.current) isMovable = true;
-                            const maxRange = getTokenMaxRange(activeTokenId!);
-                            if (dist > 0 && dist <= maxRange) isAttackable = true;
-                        }
-
-                        let bgClass = "border-emerald-900/20 hover:bg-emerald-900/40";
-                        if (isMovable) bgClass = "border-emerald-500/30 bg-emerald-950/30 hover:bg-emerald-900/60";
-                        else if (isAttackable) bgClass = "border-red-900/30 bg-red-950/20 hover:bg-red-900/40";
-
-                        return (
-                            <div
-                                key={i}
-                                onClick={() => handleCellClick(x, y)}
-                                className={`border transition-colors flex items-center justify-center relative cursor-crosshair ${bgClass}`}
-                                style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
+                {/* Token selecionado pelo Diretor. No grid de divs o botao de
+                    excluir ficava grudado no proprio token; em canvas ele vira
+                    esta barra, que tambem diz o que esta selecionado. */}
+                {isWarden && selectedTokenId && tokens[selectedTokenId] && (
+                    <div className="flex items-center justify-between gap-2 bg-zinc-950 border border-amber-900/50 px-3 py-1.5 mb-1">
+                        <span className="text-[10px] uppercase tracking-widest text-amber-500 font-bold truncate">
+                            Selecionado: {npcs[selectedTokenId]?.name || players?.[selectedTokenId]?.name || selectedTokenId}
+                            <span className="text-amber-800 ml-2">({tokens[selectedTokenId].x}, {tokens[selectedTokenId].y})</span>
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[9px] text-amber-800 uppercase hidden sm:inline">toque no mapa para mover</span>
+                            <button
+                                onClick={() => handleRemoveToken(selectedTokenId)}
+                                className="flex items-center gap-1 bg-red-950/60 hover:bg-red-900 border border-red-900 text-red-400 px-2 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors"
                             >
-                                {/* Obstacles Rendering */}
-                                {obs && (
-                                    <div 
-                                        key={obs.id}
-                                        className={`absolute inset-0 z-[5] ${obs.color} ${obs.type === 'cover' ? 'h-1/2 mt-auto' : 'h-full'} border border-black/40 pointer-events-none shadow-inner`} 
-                                    />
-                                )}
-                                <div className={`w-1 h-1 z-10 rounded-full pointer-events-none ${isMovable ? 'bg-emerald-500/50' : isAttackable ? 'bg-red-500/30' : 'bg-emerald-900/30'}`} />
-                            </div>
-                        );
-                    })}
+                                <Trash2 size={11} /> Remover
+                            </button>
+                        </div>
+                    </div>
+                )}
 
-                    {/* Tokens */}
-                    {Object.entries(tokens).map(([id, token]) => {
-                        const isSelectedByWarden = selectedTokenId === id;
-                        const isPlayerToken = !!players?.[id];
-                        const isNpc = id.startsWith('npc_');
-                        const isTargeted = !isWarden && playerId && players?.[playerId]?.selectedTargetId === id;
-                        const npcData = isNpc ? npcs[id] : null;
-                        const isCorpse = isNpc && (npcData?.isDead || (npcData?.hp ?? 1) <= 0);
-
-                        const isTurn = encounter?.turnOrder?.[encounter.currentTurnIndex] === id;
-
-                        // HP bar for NPCs
-                        const hpPct = npcData && npcData.maxHp > 0 ? (npcData.hp / npcData.maxHp) * 100 : 100;
-
-                        // Token background
-                        let tokenBg = isPlayerToken ? 'bg-emerald-500 text-zinc-950' : 'bg-red-500 text-zinc-950';
-                        if (isCorpse) tokenBg = 'bg-zinc-800 text-zinc-500 grayscale opacity-60';
-
-                        return (
-                            <div
-                                key={id}
-                                onClick={(e) => handleTokenClick(e, id)}
-                                className={`absolute flex flex-col items-center justify-center font-bold text-sm uppercase tracking-tighter shadow-lg cursor-pointer transition-all duration-300 rounded z-10
-                                    ${tokenBg}
-                                    ${!isCorpse && (isSelectedByWarden || isTargeted) ? 'ring-4 ring-white scale-110 z-20 shadow-[0_0_20px_rgba(255,255,255,0.5)]' : 'hover:scale-105'}
-                                    ${!isCorpse && isTurn ? 'ring-2 ring-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.8)]' : ''}
-                                `}
-                                style={{
-                                    left: `${token.x * CELL_SIZE}px`,
-                                    top: `${token.y * CELL_SIZE}px`,
-                                    width: `${CELL_SIZE}px`,
-                                    height: `${CELL_SIZE}px`
-                                }}
-                            >
-                                {isTargeted && !isCorpse && <Target size={24} className="absolute text-red-500 scale-150 opacity-80 animate-pulse pointer-events-none" />}
-
-                                {/* Token label: emoji icon for NPCs, initials for players */}
-                                {isCorpse ? (
-                                    <span className="text-xl z-10">💀</span>
-                                ) : isNpc ? (
-                                    <span className="text-xl z-10">{npcData?.icon || '👾'}</span>
-                                ) : (
-                                    <span className="z-10 text-[11px]">{players[id]?.name.substring(0, 2).toUpperCase() || '??'}</span>
-                                )}
-
-                                {/* HP bar under NPC token */}
-                                {isNpc && npcData && !isCorpse && (
-                                    <div className="absolute -bottom-3 left-0 right-0 h-1.5 bg-black/80 rounded-full overflow-hidden border border-zinc-700">
-                                        <div
-                                            className={`h-full transition-all ${hpPct > 50 ? 'bg-emerald-400' : hpPct > 25 ? 'bg-yellow-400' : 'bg-red-400'}`}
-                                            style={{ width: `${hpPct}%` }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* MP badge */}
-                                {!isNpc && (
-                                    <div className="absolute -bottom-2 bg-black text-[9px] px-1 text-emerald-400 border border-emerald-900">
-                                        {token.movementPoints.current}/{token.movementPoints.max}
-                                    </div>
-                                )}
-
-                                {/* Delete button (Warden selected) */}
-                                {isSelectedByWarden && isWarden && (
-                                    <button
-                                        onClick={(e) => handleRemoveToken(e, id)}
-                                        className="absolute -top-3 -right-3 bg-red-900 text-white rounded-full p-1 hover:bg-red-600 z-30 shadow-xl border border-red-500"
-                                    >
-                                        <Trash2 size={10} />
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })}
+                {/* Grid canvas — projecao isometrica em canvas.
+                    A logica de jogo segue cartesiana 2D: os tokens continuam com
+                    x/y inteiros, distancia Chebyshev e linha de visao Bresenham.
+                    So a camada de desenho mudou. */}
+                <div className="flex-1 relative scanline-overlay bg-black min-h-[320px]">
+                    <IsometricGrid
+                        gridSize={gridSize}
+                        tokens={tokens}
+                        obstacles={encounter?.obstacles || {}}
+                        players={players}
+                        npcs={npcs}
+                        currentTurnId={currentTurnId}
+                        selectedTokenId={isWarden ? selectedTokenId : null}
+                        targetedTokenId={!isWarden && playerId ? (players?.[playerId]?.selectedTargetId ?? null) : null}
+                        activeToken={activeToken}
+                        activeTokenMaxRange={activeTokenId ? getTokenMaxRange(activeTokenId) : 0}
+                        canHighlight={isWarden || isMyTurn}
+                        onCellClick={handleCellClick}
+                        onTokenClick={handleTokenClick}
+                    />
                 </div>
-                </div> {/* end grid canvas */}
             </div> {/* end grid area flex-col */}
 
             {/* GLOBAL ATTACK POPUP */}
