@@ -649,6 +649,8 @@ export const TEST_ROOM_ID = 'TESTE';
 export const TEST_ROOM_PASSWORD = 'teste';
 
 export interface TestRoomSeat {
+    /** Nome da janela — estavel, sem espacos, para window.open reaproveitar a aba. */
+    key: string;
     label: string;
     url: string;
     characterClass?: CharacterClass;
@@ -659,6 +661,24 @@ export interface TestRoomSeed {
     password: string;
     seats: TestRoomSeat[];
 }
+
+/**
+ * Assentos da sala de teste. Sincrono e sem tocar no banco de proposito: a UI
+ * precisa saber quantas janelas abrir *antes* de esperar a sala ser criada,
+ * porque depois de um await o navegador deixa de tratar o clique como gesto do
+ * usuario e bloqueia todos os window.open menos o primeiro.
+ */
+export const getTestRoomSeats = (roomId: string = TEST_ROOM_ID): TestRoomSeat[] => [
+    { key: 'diretor', label: 'DIRETOR', url: `/sala/${roomId}/diretor` },
+    ...(Object.keys(CLASS_LABELS) as CharacterClass[]).map(cls => ({
+        key: cls.toLowerCase(),
+        label: CLASS_LABELS[cls],
+        url: `/sala/${roomId}/jogador/${testPlayerId(cls)}`,
+        characterClass: cls,
+    })),
+];
+
+const testPlayerId = (cls: CharacterClass) => `teste_${cls.toLowerCase()}`;
 
 const roll2d10 = () => (Math.floor(Math.random() * 10) + 1) + (Math.floor(Math.random() * 10) + 1);
 
@@ -708,18 +728,9 @@ export const createTestRoom = async (roomId: string = TEST_ROOM_ID): Promise<Tes
     await remove(ref(database, roomPath(roomId)));
 
     const players: Record<string, CharacterSheet> = {};
-    const seats: TestRoomSeat[] = [
-        { label: 'DIRETOR', url: `/sala/${roomId}/diretor` },
-    ];
-
     for (const cls of Object.keys(CLASS_LABELS) as CharacterClass[]) {
-        const playerId = `teste_${cls.toLowerCase()}`;
+        const playerId = testPlayerId(cls);
         players[playerId] = createTestCharacter(playerId, CLASS_LABELS[cls], cls);
-        seats.push({
-            label: CLASS_LABELS[cls],
-            url: `/sala/${roomId}/jogador/${playerId}`,
-            characterClass: cls,
-        });
     }
 
     await set(ref(database, roomPath(roomId)), {
@@ -728,5 +739,5 @@ export const createTestRoom = async (roomId: string = TEST_ROOM_ID): Promise<Tes
         playerOrder: Object.keys(players),
     });
 
-    return { roomId, password: TEST_ROOM_PASSWORD, seats };
+    return { roomId, password: TEST_ROOM_PASSWORD, seats: getTestRoomSeats(roomId) };
 };

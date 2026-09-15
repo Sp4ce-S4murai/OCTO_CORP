@@ -20,6 +20,7 @@ import {
   deleteUserCharacter,
   createEmptyCharacter,
   createTestRoom,
+  getTestRoomSeats,
   TestRoomSeed
 } from "../lib/database";
 import { isAdmin } from "../lib/admin";
@@ -200,34 +201,41 @@ export default function Home() {
 
   // --- SALA TESTE (ADM) ---
 
-  /**
-   * Abre as abas dos assentos. Precisa ser chamado direto do clique: depois de
-   * um await o navegador nao considera mais o gesto do usuario e bloqueia os
-   * window.open. Por isso a criacao da sala e a abertura das abas sao dois
-   * passos, e o painel com os links continua na tela como alternativa.
-   */
   const openSeats = (seed: TestRoomSeed) => {
-    const opened = seed.seats.map(seat => window.open(seat.url, `teste_${seat.label}`));
-    setPopupsBlocked(opened.some(w => !w));
+    const blocked = seed.seats.filter(seat => !window.open(seat.url, `teste_${seat.key}`));
+    setPopupsBlocked(blocked.length > 0);
   };
 
   const handleCreateTestRoom = async () => {
     if (!confirm(
-      `Isto APAGA a sala "${'TESTE'}" inteira e a recria com uma ficha por classe.
+      `Isto APAGA a sala "TESTE" inteira e a recria com uma ficha por classe.
 
 ` +
       `Salas de campanha nao sao afetadas. Continuar?`
     )) return;
 
+    // As janelas sao abertas AGORA, ainda dentro do gesto do clique. Depois de
+    // um await o navegador deixa de considerar isto uma acao do usuario e
+    // bloqueia todos os window.open menos o primeiro — era por isso que so uma
+    // aba abria. Elas comecam em branco e so recebem a URL depois que a sala
+    // existe, senao as fichas carregariam antes de serem semeadas e o
+    // PlayerSheetClient criaria personagens vazios por cima.
+    const seats = getTestRoomSeats();
+    const windows = seats.map(seat => window.open('about:blank', `teste_${seat.key}`));
+    setPopupsBlocked(windows.some(w => !w));
+
     setAuthError("");
     setTestLoading(true);
-    setPopupsBlocked(false);
     try {
       const seed = await createTestRoom();
       setTestRoom(seed);
-      openSeats(seed);
+      seed.seats.forEach((seat, i) => {
+        const w = windows[i];
+        if (w) w.location.href = seat.url;
+      });
     } catch (err: any) {
       setAuthError("Falha ao criar a Sala Teste: " + err.message);
+      windows.forEach(w => w?.close());
     } finally {
       setTestLoading(false);
     }
