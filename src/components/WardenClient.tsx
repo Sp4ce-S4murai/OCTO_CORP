@@ -226,10 +226,20 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 canvas.height = height;
 
                 const ctx = canvas.getContext("2d");
-                if (ctx) {
-                    ctx.drawImage(img, 0, 0, width, height);
-                    const base64Data = canvas.toDataURL("image/jpeg", 0.7); // compress quality
-                    setRoomImage(roomId, base64Data);
+                if (!ctx) return;
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // toBlob em vez de toDataURL: a imagem vai para o Firebase
+                // Storage, e so a URL e gravada no Realtime Database.
+                canvas.toBlob(async (blob) => {
+                    if (!blob) return;
+                    try {
+                        await setRoomImage(roomId, blob);
+                    } catch (err) {
+                        console.error("Falha ao transmitir imagem:", err);
+                        alert("Falha ao subir a imagem para o Storage. Verifique a conexao e as regras do Firebase Storage.");
+                        return;
+                    }
                     pushLog(roomId, {
                         timestamp: getTimestamp(),
                         playerName: "SISTEMA",
@@ -239,7 +249,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         roll: 0,
                         result: 'Warden Message'
                     });
-                }
+                }, "image/jpeg", 0.7);
             };
             img.src = event.target?.result as string;
         };

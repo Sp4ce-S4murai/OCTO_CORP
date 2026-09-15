@@ -178,7 +178,13 @@ export interface RoomData {
     players: Record<string, CharacterSheet>;
     playerOrder?: string[];
     logs: Record<string, RollLog>;
+    /**
+     * URL da imagem transmitida na sala. Salas antigas guardam aqui um data URI
+     * base64 — <img src> aceita os dois, entao o legado continua exibindo.
+     */
     activeImage?: string;
+    /** Caminho do objeto no Firebase Storage, para poder apagar o arquivo depois. */
+    activeImageStoragePath?: string;
     ship?: ShipState;
     globalInventory?: Record<string, Item | Weapon>; // Dynamic room-scoped item db
 }
