@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
 import { Weapon, NpcAttack } from "@/types/character";
@@ -12,7 +12,7 @@ const IsometricGrid = dynamic(() => import("./IsometricGrid"), {
     ssr: false,
     loading: () => <div className="w-full h-full flex items-center justify-center text-emerald-700 animate-pulse font-mono text-sm">Projetando malha...</div>,
 });
-import { checkLineOfSight } from "@/lib/tacticalUtils";
+import { checkLineOfSight, computeReachableCells, isCellBlocked } from "@/lib/tacticalUtils";
 import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
 
 interface TacticalGridProps {
@@ -138,6 +138,18 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         return Math.max(...weapons.map(w => w.range));
     };
 
+    // Alcance real do token ativo, contornando paredes e outros tokens.
+    const reachable = useMemo(() => {
+        if (!activeToken || !(isWarden || isMyTurn)) return new Map<string, number>();
+        return computeReachableCells(
+            activeToken.x,
+            activeToken.y,
+            activeToken.movementPoints.current,
+            encounter,
+            activeTokenId ?? undefined
+        );
+    }, [activeToken, activeTokenId, encounter, isWarden, isMyTurn]);
+
     const handleEndTurn = () => {
         if (!encounter) return;
         nextTurn(roomId, encounter);
@@ -147,14 +159,17 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         if (!isWarden) {
             // Players can only move on their own turn
             if (!isMyTurn) return;
-            const myToken = Object.entries(tokens).find(([id]) => id === playerId);
+            const myToken = tokens[playerId!];
             if (myToken) {
-                const dist = Math.max(Math.abs(myToken[1].x - x), Math.abs(myToken[1].y - y));
-                if (dist <= myToken[1].movementPoints.current) {
-                    updateTokenPosition(roomId, playerId!, x, y, myToken[1].color);
-                    deductTokenMovement(roomId, playerId!, dist);
-                }
+                // Custo real do caminho. Ausente = parede, celula ocupada ou
+                // simplesmente longe demais dando a volta.
+                const cost = reachable.get(`${x},${y}`);
+                if (cost === undefined) return;
+                updateTokenPosition(roomId, playerId!, x, y, myToken.color);
+                deductTokenMovement(roomId, playerId!, cost);
             } else {
+                // Primeira entrada no grid: nao pode ser dentro de uma parede.
+                if (isCellBlocked(x, y, encounter, playerId)) return;
                 const maxMp = players?.[playerId!]?.movementPoints?.max || 6;
                 updateTokenPosition(roomId, playerId!, x, y, 'bg-emerald-500', maxMp);
             }
@@ -891,6 +906,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         selectedTokenId={isWarden ? selectedTokenId : null}
                         targetedTokenId={!isWarden && playerId ? (players?.[playerId]?.selectedTargetId ?? null) : null}
                         activeToken={activeToken}
+                        reachable={reachable}
                         activeTokenMaxRange={activeTokenId ? getTokenMaxRange(activeTokenId) : 0}
                         canHighlight={isWarden || isMyTurn}
                         onCellClick={handleCellClick}

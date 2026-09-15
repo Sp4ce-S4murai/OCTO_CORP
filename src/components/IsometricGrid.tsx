@@ -19,8 +19,14 @@ export interface IsometricGridProps {
     currentTurnId: string | null;
     selectedTokenId: string | null;
     targetedTokenId: string | null;
-    /** Token cujo alcance de movimento e de ataque deve ser destacado. */
+    /** Token cujo alcance de ataque deve ser destacado. */
     activeToken: GridToken | null;
+    /**
+     * Celulas realmente alcancaveis, "x,y" -> custo em passos. Vem de fora
+     * porque quem calcula e o tacticalUtils, contornando paredes — nao da para
+     * deduzir isso aqui so com a distancia ate o destino.
+     */
+    reachable: Map<string, number>;
     activeTokenMaxRange: number;
     canHighlight: boolean;
     onCellClick: (x: number, y: number) => void;
@@ -36,7 +42,7 @@ const MAX_SCALE = 2.5;
 export default function IsometricGrid(props: IsometricGridProps) {
     const {
         gridSize, tokens, obstacles, players, npcs, currentTurnId,
-        selectedTokenId, targetedTokenId, activeToken,
+        selectedTokenId, targetedTokenId, activeToken, reachable,
         activeTokenMaxRange, canHighlight, onCellClick, onTokenClick,
     } = props;
 
@@ -176,14 +182,19 @@ export default function IsometricGrid(props: IsometricGridProps) {
                 let fill = "#0a0f0d";
                 let stroke = "rgba(16,185,129,0.14)";
 
-                if (activeToken && canHighlight) {
-                    const dist = chebyshev(activeToken.x, activeToken.y, x, y);
-                    if (dist > 0 && dist <= activeToken.movementPoints.current) {
+                if (canHighlight) {
+                    // Verde: da para chegar de fato, ja descontando o contorno
+                    // de paredes. Vermelho: dentro do alcance de ataque, que e
+                    // Chebyshev puro — a linha de visao e checada no disparo.
+                    if (reachable.has(`${x},${y}`)) {
                         fill = "rgba(16,185,129,0.18)";
                         stroke = "rgba(16,185,129,0.45)";
-                    } else if (dist > 0 && dist <= activeTokenMaxRange) {
-                        fill = "rgba(239,68,68,0.13)";
-                        stroke = "rgba(239,68,68,0.35)";
+                    } else if (activeToken) {
+                        const dist = chebyshev(activeToken.x, activeToken.y, x, y);
+                        if (dist > 0 && dist <= activeTokenMaxRange) {
+                            fill = "rgba(239,68,68,0.13)";
+                            stroke = "rgba(239,68,68,0.35)";
+                        }
                     }
                 }
 
@@ -212,7 +223,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
             }
         }
         return out;
-    }, [gridSize, obstacles, activeToken, activeTokenMaxRange, canHighlight]);
+    }, [gridSize, obstacles, activeToken, reachable, activeTokenMaxRange, canHighlight]);
 
     /**
      * Blocos e tokens saem na mesma lista, ordenados por profundidade: uma
