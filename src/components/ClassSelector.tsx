@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CharacterSheet, CharacterClass, Stats, Saves } from "@/types/character";
+import { CharacterSheet, CharacterClass, Stats } from "@/types/character";
 import { updatePlayer } from "@/lib/database";
-import { CLASS_LABELS, computeStarterKitChange } from "@/lib/itemsDictionary";
+import { CLASS_LABELS } from "@/lib/itemsDictionary";
+import { applyClassToCharacter } from "@/lib/characterClass";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -23,77 +24,13 @@ export function ClassSelector({ roomId, character }: Props) {
     }, [character.characterClass]);
 
     const applyClassMutations = async (cls: CharacterClass, minusAndroid?: keyof Stats, plusScientist?: keyof Stats) => {
-        const freshMods: Partial<Stats> = {};
-        const freshSaveMods: Partial<Saves> = {};
-
-        // Base derived from the original roll
-        const newStats: Stats = { ...character.baseStats };
-        const newSaves: Saves = { ...character.baseSaves };
-        let maxWounds = 2; // Default
-
-        /*
-         * MUTAÇÕES DO GENOMA
-         */
-        if (cls === 'Soldier') {
-            freshMods.combat = 10;
-            freshSaveMods.body = 10;
-            freshSaveMods.fear = 20;
-            maxWounds = 3;
-        }
-        else if (cls === 'Android') {
-            freshMods.intellect = 20;
-            freshSaveMods.fear = 60;
-            maxWounds = 3;
-            if (minusAndroid) {
-                freshMods[minusAndroid] = -10;
-            }
-        }
-        else if (cls === 'Scientist') {
-            freshMods.intellect = 10;
-            freshSaveMods.sanity = 30;
-            if (plusScientist) {
-                freshMods[plusScientist] = (freshMods[plusScientist] || 0) + 5;
-            }
-        }
-        else if (cls === 'Teamster') {
-            freshMods.strength = 5;
-            freshMods.speed = 5;
-            freshMods.intellect = 5;
-            freshMods.combat = 5;
-            freshSaveMods.sanity = 10;
-            freshSaveMods.fear = 10;
-            freshSaveMods.body = 10;
-        }
-
-        // Apply Deltas
-        for (const key in freshMods) {
-            newStats[key as keyof Stats] += freshMods[key as keyof Stats] || 0;
-        }
-        for (const key in freshSaveMods) {
-            newSaves[key as keyof Saves] += freshSaveMods[key as keyof Saves] || 0;
-        }
-
-        // Prepare Firebase update
-        const updatePayload: Partial<CharacterSheet> = {
-            characterClass: cls,
-            classMods: freshMods,
-            classSaveMods: freshSaveMods,
-            stats: newStats,
-            saves: newSaves,
-            vitals: {
-                ...character.vitals,
-                wounds: { ...character.vitals.wounds, max: maxWounds }
-            }
-        };
-
-        // Kit inicial: concedido aqui, na primeira vez que esta classe e
-        // confirmada. computeStarterKitChange devolve null se o kit desta
-        // classe ja foi dado, entao mexer no atributo do Android/Cientista
-        // (que reaplica as mutacoes) nao duplica nada.
-        const kitChange = computeStarterKitChange(character, cls);
-        if (kitChange) Object.assign(updatePayload, kitChange);
-
-        await updatePlayer(roomId, character.id, updatePayload);
+        // As mutacoes de genoma vivem em lib/characterClass.ts para poderem ser
+        // reaproveitadas fora da UI (ex: semear as fichas da Sala Teste).
+        const payload = applyClassToCharacter(character, cls, {
+            androidPenaltyStat: minusAndroid,
+            scientistBonusStat: plusScientist,
+        });
+        await updatePlayer(roomId, character.id, payload);
     };
 
     const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

@@ -1,7 +1,9 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database, storage } from "./firebase";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
+import { CharacterSheet, CharacterClass, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
+import { applyClassToCharacter } from "./characterClass";
+import { CLASS_LABELS } from "./itemsDictionary";
 import { roomPath, playerPath, logsPath, userProfilePath, roomImageStoragePath } from "./paths";
 
 
@@ -657,3 +659,91 @@ export const updateNpcHp = async (roomId: string, npcId: string, newHp: number) 
     await set(npcRef, newHp);
 };
 
+
+// --- SALA TESTE (ferramenta de ADM) ---
+
+export const TEST_ROOM_ID = 'TESTE';
+export const TEST_ROOM_PASSWORD = 'teste';
+
+export interface TestRoomSeat {
+    label: string;
+    url: string;
+    characterClass?: CharacterClass;
+}
+
+export interface TestRoomSeed {
+    roomId: string;
+    password: string;
+    seats: TestRoomSeat[];
+}
+
+const roll2d10 = () => (Math.floor(Math.random() * 10) + 1) + (Math.floor(Math.random() * 10) + 1);
+
+/**
+ * Personagem de teste com atributos ja rolados e classe aplicada.
+ *
+ * createEmptyCharacter deixa tudo zerado porque o jogador preenche a ficha na
+ * mesa; numa ficha de teste isso e inutil — com Combate 0 nenhum ataque acerta
+ * nada. Aqui os valores saem no padrao Mothership: 2d10+25 para Atributos e
+ * 2d10+10 para Resistencias, antes das mutacoes de classe.
+ */
+export const createTestCharacter = (
+    id: string,
+    name: string,
+    characterClass: CharacterClass
+): CharacterSheet => {
+    const base = createEmptyCharacter(id, name);
+    base.baseStats = {
+        strength: roll2d10() + 25,
+        speed: roll2d10() + 25,
+        intellect: roll2d10() + 25,
+        combat: roll2d10() + 25,
+    };
+    base.baseSaves = {
+        sanity: roll2d10() + 10,
+        fear: roll2d10() + 10,
+        body: roll2d10() + 10,
+    };
+
+    return {
+        ...base,
+        ...applyClassToCharacter(base, characterClass, {
+            androidPenaltyStat: 'strength',
+            scientistBonusStat: 'intellect',
+        }),
+    } as CharacterSheet;
+};
+
+/**
+ * Zera a sala de teste e a repovoa com uma ficha pronta por classe.
+ *
+ * Destrutivo de proposito: apaga `{namespace}rooms/TESTE` inteira antes de
+ * semear, para que cada teste comece do mesmo estado conhecido. So mexe na
+ * sala TESTE — nunca em salas de campanha.
+ */
+export const createTestRoom = async (roomId: string = TEST_ROOM_ID): Promise<TestRoomSeed> => {
+    await remove(ref(database, roomPath(roomId)));
+
+    const players: Record<string, CharacterSheet> = {};
+    const seats: TestRoomSeat[] = [
+        { label: 'DIRETOR', url: `/sala/${roomId}/diretor` },
+    ];
+
+    for (const cls of Object.keys(CLASS_LABELS) as CharacterClass[]) {
+        const playerId = `teste_${cls.toLowerCase()}`;
+        players[playerId] = createTestCharacter(playerId, CLASS_LABELS[cls], cls);
+        seats.push({
+            label: CLASS_LABELS[cls],
+            url: `/sala/${roomId}/jogador/${playerId}`,
+            characterClass: cls,
+        });
+    }
+
+    await set(ref(database, roomPath(roomId)), {
+        settings: { password: TEST_ROOM_PASSWORD },
+        players,
+        playerOrder: Object.keys(players),
+    });
+
+    return { roomId, password: TEST_ROOM_PASSWORD, seats };
+};

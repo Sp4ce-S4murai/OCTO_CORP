@@ -18,8 +18,11 @@ import {
   subscribeToUserCharacters,
   saveUserCharacter,
   deleteUserCharacter,
-  createEmptyCharacter
+  createEmptyCharacter,
+  createTestRoom,
+  TestRoomSeed
 } from "../lib/database";
+import { isAdmin } from "../lib/admin";
 import { CharacterSheet } from "../types/character";
 
 type AppMode = 'login' | 'dashboard' | 'diretor' | 'jogador_library' | 'jogador_join';
@@ -53,6 +56,13 @@ export default function Home() {
   // Character Creation State
   const [newCharName, setNewCharName] = useState("");
   const [isCreatingChar, setIsCreatingChar] = useState(false);
+
+  // Sala Teste (ADM)
+  const [testRoom, setTestRoom] = useState<TestRoomSeed | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const [popupsBlocked, setPopupsBlocked] = useState(false);
+
+  const userIsAdmin = isAdmin(user?.email);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -185,6 +195,41 @@ export default function Home() {
     } catch (err: any) {
       setAuthError("Erro de Conexão: " + err.message);
       setPlayerLoading(false);
+    }
+  };
+
+  // --- SALA TESTE (ADM) ---
+
+  /**
+   * Abre as abas dos assentos. Precisa ser chamado direto do clique: depois de
+   * um await o navegador nao considera mais o gesto do usuario e bloqueia os
+   * window.open. Por isso a criacao da sala e a abertura das abas sao dois
+   * passos, e o painel com os links continua na tela como alternativa.
+   */
+  const openSeats = (seed: TestRoomSeed) => {
+    const opened = seed.seats.map(seat => window.open(seat.url, `teste_${seat.label}`));
+    setPopupsBlocked(opened.some(w => !w));
+  };
+
+  const handleCreateTestRoom = async () => {
+    if (!confirm(
+      `Isto APAGA a sala "${'TESTE'}" inteira e a recria com uma ficha por classe.
+
+` +
+      `Salas de campanha nao sao afetadas. Continuar?`
+    )) return;
+
+    setAuthError("");
+    setTestLoading(true);
+    setPopupsBlocked(false);
+    try {
+      const seed = await createTestRoom();
+      setTestRoom(seed);
+      openSeats(seed);
+    } catch (err: any) {
+      setAuthError("Falha ao criar a Sala Teste: " + err.message);
+    } finally {
+      setTestLoading(false);
     }
   };
 
@@ -325,6 +370,62 @@ export default function Home() {
                 >
                   [ ACESSO DIRETOR ]
                 </button>
+
+                {userIsAdmin && (
+                  <div className="border border-amber-900/60 bg-amber-950/10 p-4 flex flex-col gap-3">
+                    <span className="text-xs text-amber-600 uppercase tracking-widest font-bold border-b border-amber-900/40 pb-2">
+                      Protocolo de Manutencao // ADM
+                    </span>
+
+                    <button
+                      onClick={handleCreateTestRoom}
+                      disabled={testLoading}
+                      className="bg-amber-900/20 hover:bg-amber-800/40 border border-amber-700 text-amber-400 p-4 text-lg uppercase tracking-widest font-bold transition-colors disabled:opacity-40"
+                    >
+                      {testLoading ? "Semeando setor..." : "[ SALA TESTE ]"}
+                    </button>
+                    <span className="text-xs text-amber-700/80">
+                      Recria a sala TESTE do zero com uma ficha pronta por classe e abre uma aba para cada assento.
+                    </span>
+
+                    {testRoom && (
+                      <div className="flex flex-col gap-2 border-t border-amber-900/40 pt-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-amber-600 uppercase tracking-widest font-bold">
+                            Setor {testRoom.roomId} // senha: {testRoom.password}
+                          </span>
+                          <button
+                            onClick={() => openSeats(testRoom)}
+                            className="text-xs text-amber-500 hover:text-amber-300 underline uppercase tracking-widest"
+                          >
+                            Reabrir abas
+                          </button>
+                        </div>
+
+                        {popupsBlocked && (
+                          <span className="text-xs text-red-400">
+                            O navegador bloqueou parte das abas. Libere popups para este site, ou abra os assentos um a um abaixo.
+                          </span>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-1">
+                          {testRoom.seats.map(seat => (
+                            <a
+                              key={seat.url}
+                              href={seat.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-zinc-950 border border-amber-900/40 hover:border-amber-600 text-amber-400 px-3 py-2 text-sm flex items-center justify-between transition-colors"
+                            >
+                              <span className="uppercase tracking-widest font-bold">{seat.label}</span>
+                              <span className="text-amber-800 text-xs">{seat.url}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
