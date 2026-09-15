@@ -28,7 +28,3 @@ export const userProfilePath = (userId: string) => `${RTDB_NAMESPACE}users/${use
 
 /** Templates de mapa reutilizáveis, fora do estado ao vivo da sala (Fase 4). */
 export const mapPath = (mapId: string) => `${mapsRoot()}/${mapId}`;
-
-/** Prefixo usado pelo Firebase Storage para as imagens transmitidas na sala. */
-export const roomImageStoragePath = (roomId: string, fileName: string) =>
-    `${RTDB_NAMESPACE}rooms/${roomId}/images/${fileName}`;

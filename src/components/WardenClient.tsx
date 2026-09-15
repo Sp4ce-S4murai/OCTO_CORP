@@ -205,9 +205,11 @@ export default function WardenClient({ roomId }: { roomId: string }) {
             const img = new window.Image();
             img.onload = () => {
                 const canvas = document.createElement("canvas");
-                // Max dimensions to avoid huge base64 strings
-                const MAX_WIDTH = 1200;
-                const MAX_HEIGHT = 1200;
+                // A imagem vira base64 dentro do Realtime Database, entao cada
+                // troca de slide trafega este payload. Comprimir aqui e a unica
+                // defesa que existe enquanto nao houver Storage.
+                const MAX_WIDTH = 900;
+                const MAX_HEIGHT = 900;
                 let width = img.width;
                 let height = img.height;
 
@@ -229,15 +231,15 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                 if (!ctx) return;
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // toBlob em vez de toDataURL: a imagem vai para o Firebase
-                // Storage, e so a URL e gravada no Realtime Database.
+                // toBlob em vez de toDataURL porque setRoomImage recebe um Blob:
+                // e o que permite trocar RTDB por Storage mexendo numa funcao so.
                 canvas.toBlob(async (blob) => {
                     if (!blob) return;
                     try {
                         await setRoomImage(roomId, blob);
                     } catch (err) {
                         console.error("Falha ao transmitir imagem:", err);
-                        alert("Falha ao subir a imagem para o Storage. Verifique a conexao e as regras do Firebase Storage.");
+                        alert(err instanceof Error ? err.message : "Falha ao transmitir a imagem.");
                         return;
                     }
                     pushLog(roomId, {
@@ -249,7 +251,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                         roll: 0,
                         result: 'Warden Message'
                     });
-                }, "image/jpeg", 0.7);
+                }, "image/jpeg", 0.6);
             };
             img.src = event.target?.result as string;
         };

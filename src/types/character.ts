@@ -179,12 +179,14 @@ export interface RoomData {
     playerOrder?: string[];
     logs: Record<string, RollLog>;
     /**
-     * URL da imagem transmitida na sala. Salas antigas guardam aqui um data URI
-     * base64 — <img src> aceita os dois, entao o legado continua exibindo.
+     * Imagem transmitida na sala, como data URI base64.
+     *
+     * O ideal seria o Firebase Storage, guardando so a URL — mas o Storage
+     * exige plano Blaze, que este projeto nao tem. `setRoomImage` recebe um
+     * Blob justamente para que a troca seja uma funcao so, no dia em que fizer
+     * sentido pagar por isso.
      */
     activeImage?: string;
-    /** Caminho do objeto no Firebase Storage, para poder apagar o arquivo depois. */
-    activeImageStoragePath?: string;
     ship?: ShipState;
     globalInventory?: Record<string, Item | Weapon>; // Dynamic room-scoped item db
 }

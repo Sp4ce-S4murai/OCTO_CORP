@@ -1,10 +1,9 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
-import { database, storage } from "./firebase";
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { database } from "./firebase";
 import { CharacterSheet, CharacterClass, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
 import { applyClassToCharacter } from "./characterClass";
 import { CLASS_LABELS } from "./itemsDictionary";
-import { roomPath, playerPath, logsPath, userProfilePath, roomImageStoragePath } from "./paths";
+import { roomPath, playerPath, logsPath, userProfilePath } from "./paths";
 
 
 // Caminhos vem de lib/paths.ts — ver o namespace v2_ documentado la.
@@ -101,52 +100,36 @@ export const setRoomLockdown = async (roomId: string, isLocked: boolean) => {
 };
 
 /**
- * Sobe a imagem transmitida para o Firebase Storage e guarda so a URL no RTDB.
+ * Grava a imagem transmitida na sala.
  *
- * Antes o data URI base64 inteiro (~centenas de KB) era gravado em
- * `activeImage`, e o `subscribeToRoom` de todo jogador rebaixava a sala inteira
- * a cada troca de slide.
+ * Recebe um Blob, e nao uma string, de proposito: hoje ele vira data URI
+ * base64 no Realtime Database, porque o Firebase Storage exige plano Blaze e
+ * este projeto esta no Spark. No dia em que o Storage entrar, so o corpo desta
+ * funcao muda — nenhum componente precisa ser tocado.
  */
 export const setRoomImage = async (roomId: string, blob: Blob) => {
-    const previous = await get(ref(database, `${roomPath(roomId)}/activeImageStoragePath`));
+    const dataUri = await blobToDataUri(blob);
 
-    const objectPath = roomImageStoragePath(roomId, `${Date.now()}.jpg`);
-    const objectRef = storageRef(storage, objectPath);
-    await uploadBytes(objectRef, blob, { contentType: 'image/jpeg' });
-    const url = await getDownloadURL(objectRef);
+    // ~700 KB de base64 ja indicam que a compressao no componente falhou; sem
+    // isto o Diretor so veria a transmissao travar sem explicacao.
+    if (dataUri.length > 700_000) {
+        throw new Error('Imagem grande demais mesmo apos compressao. Use uma imagem menor.');
+    }
 
-    await update(ref(database, roomPath(roomId)), {
-        activeImage: url,
-        activeImageStoragePath: objectPath,
-    });
-
-    await deleteStoredImage(previous.val());
+    await set(ref(database, `${roomPath(roomId)}/activeImage`), dataUri);
 };
 
 export const clearRoomImage = async (roomId: string) => {
-    const stored = await get(ref(database, `${roomPath(roomId)}/activeImageStoragePath`));
+    await remove(ref(database, `${roomPath(roomId)}/activeImage`));
+};
 
-    await update(ref(database, roomPath(roomId)), {
-        activeImage: null,
-        activeImageStoragePath: null,
+const blobToDataUri = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
     });
-
-    await deleteStoredImage(stored.val());
-};
-
-/**
- * O arquivo antigo some por melhor esforco: se a exclusao falhar (regra de
- * Storage, objeto ja removido) isso nao pode derrubar a troca de slide, que e
- * o que o Diretor esta de fato esperando na mesa.
- */
-const deleteStoredImage = async (objectPath: unknown) => {
-    if (typeof objectPath !== 'string' || !objectPath) return;
-    try {
-        await deleteObject(storageRef(storage, objectPath));
-    } catch (err) {
-        console.warn('Falha ao remover imagem antiga do Storage:', err);
-    }
-};
 
 export const submitPanicTestRoll = async (roomId: string, playerId: string, playerName: string, rolledD20: number, stress: number, isPanicCheck: boolean) => {
     const panicRef = ref(database, `${roomPath(roomId)}/activePanicTest`);
