@@ -1,6 +1,6 @@
 import { ref, onValue, set, update, push, remove, get } from "firebase/database";
 import { database } from "./firebase";
-import { CharacterSheet, CharacterClass, RollLog, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
+import { CharacterSheet, CharacterClass, RollLog, EnvironmentState, EncounterState, GridObstacle, Item, Weapon, NpcData, NpcAttack } from "../types/character";
 import { applyClassToCharacter } from "./characterClass";
 import { CLASS_LABELS } from "./itemsDictionary";
 import { roomPath, playerPath, logsPath, userProfilePath } from "./paths";
@@ -183,6 +183,36 @@ export const pushLog = async (roomId: string, log: Omit<RollLog, 'id'>) => {
 
 // --- ENCOUNTER SYSTEM ---
 
+/**
+ * Garante que exista um nó de encontro, criando um dormente se preciso.
+ *
+ * O Diretor precisa montar o mapa e posicionar ameacas ANTES de iniciar o
+ * combate — e startEncounter ja e escrito para preservar npcs, obstaculos,
+ * tokens e gridSize que existirem. Sem isto, addNPCToEncounter batia em
+ * `if (!encounter) return` e nao acontecia nada, sem erro nenhum na tela.
+ */
+export const ensureEncounter = async (roomId: string): Promise<EncounterState> => {
+    const encPath = ref(database, `${roomPath(roomId)}/encounter`);
+    const snapshot = await get(encPath);
+    const current = snapshot.val() as EncounterState | null;
+    if (current) return current;
+
+    const dormant: EncounterState = {
+        isActive: false,
+        status: 'rolling',
+        initiatives: {},
+        turnOrder: [],
+        currentTurnIndex: 0,
+        round: 1,
+        npcs: {},
+        tokens: {},
+        obstacles: {},
+        gridSize: 20,
+    };
+    await set(encPath, dormant);
+    return dormant;
+};
+
 export const startEncounter = async (roomId: string) => {
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
     const snapshot = await get(encPath);
@@ -261,17 +291,48 @@ export const endEncounter = async (roomId: string) => {
 
 // --- NPC SYSTEM ---
 
+/**
+ * Primeira celula livre a partir do centro do mapa.
+ *
+ * Toda ameaca nascia fixa em (0, 0) — no grid isometrico isso e o canto de
+ * cima, e varias ameacas seguidas empilhavam no mesmo losango, dando a
+ * impressao de que o botao nao tinha funcionado.
+ */
+const findFreeCell = (encounter: EncounterState): { x: number; y: number } => {
+    const size = encounter.gridSize || 20;
+    const taken = new Set(
+        Object.values(encounter.tokens || {}).map(t => `${Number(t.x)},${Number(t.y)}`)
+    );
+    Object.values(encounter.obstacles || {}).forEach(o => {
+        if (o.isBlocking) taken.add(`${Number(o.x)},${Number(o.y)}`);
+    });
+
+    const mid = Math.floor(size / 2);
+    // Anéis concentricos a partir do centro.
+    for (let r = 0; r < size; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dy = -r; dy <= r; dy++) {
+                if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+                const x = mid + dx;
+                const y = mid + dy;
+                if (x < 0 || y < 0 || x >= size || y >= size) continue;
+                if (!taken.has(`${x},${y}`)) return { x, y };
+            }
+        }
+    }
+    return { x: 0, y: 0 };
+};
+
 export const addNPCToEncounter = async (
     roomId: string, 
     npcData: { name: string; initiative: number; icon?: string; color: string; hp: number; maxHp: number; movementMax?: number; combat?: number; attacks?: NpcAttack[] }
 ) => {
     const npcId = `npc_${crypto.randomUUID()}`;
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
-    
-    // We must fetch current encounter to inject the NPC correctly into turn order if active
-    const snapshot = await get(encPath);
-    const encounter = snapshot.val() as EncounterState;
-    if (!encounter) return;
+
+    // Cria o encontro se ainda nao houver: posicionar ameacas no mapa e uma
+    // etapa de preparacao, nao exige combate ja iniciado.
+    const encounter = await ensureEncounter(roomId);
 
     const movMax = npcData.movementMax || 6;
 
@@ -290,10 +351,11 @@ export const addNPCToEncounter = async (
     };
     updates[`npcs/${npcId}`] = npcRecord;
     updates[`initiatives/${npcId}`] = npcData.initiative;
+    const spawn = findFreeCell(encounter);
     updates[`tokens/${npcId}`] = {
         id: npcId,
-        x: 0,
-        y: 0,
+        x: spawn.x,
+        y: spawn.y,
         color: npcData.color,
         movementPoints: { current: movMax, max: movMax }
     };
@@ -547,7 +609,8 @@ export const removeTokenFromGrid = async (roomId: string, tokenId: string) => {
     await update(encPath, updates);
 };
 
-export const addGridObstacle = async (roomId: string, obstacle: any) => {
+export const addGridObstacle = async (roomId: string, obstacle: GridObstacle) => {
+    await ensureEncounter(roomId);
     const obPath = ref(database, `${roomPath(roomId)}/encounter/obstacles/${obstacle.id}`);
     await set(obPath, obstacle);
 };
@@ -558,6 +621,7 @@ export const removeGridObstacle = async (roomId: string, obstacleId: string) => 
 };
 
 export const updateEncounterState = async (roomId: string, updates: Partial<EncounterState>) => {
+    await ensureEncounter(roomId);
     const encPath = ref(database, `${roomPath(roomId)}/encounter`);
     await update(encPath, updates);
 };
@@ -726,6 +790,20 @@ export const createTestRoom = async (roomId: string = TEST_ROOM_ID): Promise<Tes
         settings: { password: TEST_ROOM_PASSWORD },
         players,
         playerOrder: Object.keys(players),
+        // Encontro dormente ja incluido: sem ele o Diretor abre a sala de teste
+        // e nao consegue adicionar ameaca nem pintar obstaculo.
+        encounter: {
+            isActive: false,
+            status: 'rolling',
+            initiatives: {},
+            turnOrder: [],
+            currentTurnIndex: 0,
+            round: 1,
+            npcs: {},
+            tokens: {},
+            obstacles: {},
+            gridSize: 20,
+        },
     });
 
     return { roomId, password: TEST_ROOM_PASSWORD, seats: getTestRoomSeats(roomId) };
