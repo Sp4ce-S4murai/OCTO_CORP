@@ -19,6 +19,7 @@ import { ShipState } from "@/types/ship";
 import { generatePanicResult, PanicOracleOutput } from "@/lib/panicOracle";
 import { ShipDashboard } from "./ShipDashboard";
 import { StationPanel } from "./StationPanel";
+import { isLockedPath, playersPath, playerPath, environmentPath, encounterPath, activeImagePath, shipPath, activePanicTestPath, logsPath } from "@/lib/paths";
 
 
 const VOID_MESSAGES = [
@@ -116,14 +117,14 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         // Listen for Room Lockdown State & Environment Telemetry
         import("@/lib/firebase").then(({ database }) => {
             import("firebase/database").then(({ ref, onValue, off }) => {
-                const lockedRef = ref(database, `rooms/${roomId}/isLocked`);
+                const lockedRef = ref(database, isLockedPath(roomId));
                 const unsub1 = onValue(lockedRef, (snap) => {
                     setIsRoomLocked(snap.val() || false);
                 });
                 cleanups.push(unsub1);
 
                 // Listen for other players
-                const playersRef = ref(database, `rooms/${roomId}/players`);
+                const playersRef = ref(database, playersPath(roomId));
                 const unsub2 = onValue(playersRef, (snap) => {
                     const playersData = snap.val();
                     if (playersData) {
@@ -146,31 +147,31 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
                 });
                 cleanups.push(unsub2);
 
-                const envRef = ref(database, `rooms/${roomId}/environment`);
+                const envRef = ref(database, environmentPath(roomId));
                 const unsub3 = onValue(envRef, (snap) => {
                     setEnvironment(snap.val());
                 });
                 cleanups.push(unsub3);
 
-                const encounterRef = ref(database, `rooms/${roomId}/encounter`);
+                const encounterRef = ref(database, encounterPath(roomId));
                 const unsub4 = onValue(encounterRef, (snap) => {
                     setEncounter(snap.val());
                 });
                 cleanups.push(unsub4);
 
-                const imageRef = ref(database, `rooms/${roomId}/activeImage`);
+                const imageRef = ref(database, activeImagePath(roomId));
                 const unsub5 = onValue(imageRef, (snap) => {
                     setActiveImage(snap.val());
                 });
                 cleanups.push(unsub5);
 
-                const shipRef = ref(database, `rooms/${roomId}/ship`);
+                const shipRef = ref(database, shipPath(roomId));
                 const unsub6 = onValue(shipRef, (snap) => {
                     setShipData(snap.val());
                 });
                 cleanups.push(unsub6);
 
-                const panicRef = ref(database, `rooms/${roomId}/activePanicTest`);
+                const panicRef = ref(database, activePanicTestPath(roomId));
                 const unsub7 = onValue(panicRef, (snap) => {
                     const data = snap.val();
                     setActivePanicTest(data);
@@ -196,7 +197,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
         let initial = true;
         import("@/lib/firebase").then(({ database }) => {
             import("firebase/database").then(({ ref, query, limitToLast, onChildAdded }) => {
-                const logsRef = query(ref(database, `rooms/${roomId}/logs`), limitToLast(1));
+                const logsRef = query(ref(database, logsPath(roomId)), limitToLast(1));
 
                 const unsubscribe = onChildAdded(logsRef, (snap) => {
                     if (initial) {
@@ -242,7 +243,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
             } else {
                 import("@/lib/firebase").then(({ database }) => {
                     import("firebase/database").then(({ ref, onValue }) => {
-                        const nameRef = ref(database, `rooms/${roomId}/players/${activeId}/name`);
+                        const nameRef = ref(database, `${playerPath(roomId, activeId)}/name`);
                         unsubscribeName = onValue(nameRef, (snap) => {
                             setActivePlayerName(snap.val() || "Desconhecido");
                         });
@@ -1193,7 +1194,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                                                                 import("@/lib/firebase").then(({ database }) => {
                                                                     import("firebase/database").then(({ ref, update }) => {
-                                                                        update(ref(database, `rooms/${roomId}/encounter`), {
+                                                                        update(ref(database, encounterPath(roomId)), {
                                                                             lastAttackEvent: {
                                                                                 id: Date.now(),
                                                                                 attacker: character.name.toUpperCase(),
@@ -1221,7 +1222,7 @@ export default function PlayerSheetClient({ roomId, playerId }: { roomId: string
 
                                                                 import("@/lib/firebase").then(({ database }) => {
                                                                     import("firebase/database").then(({ ref, update }) => {
-                                                                        update(ref(database, `rooms/${roomId}/encounter`), {
+                                                                        update(ref(database, encounterPath(roomId)), {
                                                                             lastAttackEvent: {
                                                                                 id: Date.now(),
                                                                                 attacker: character.name.toUpperCase(),

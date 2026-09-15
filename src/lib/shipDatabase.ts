@@ -2,8 +2,9 @@ import { ref, onValue, set, update, push, remove, get } from "firebase/database"
 import { database } from "./firebase";
 import { ShipState, ShipWeapon, EnemyShip, ShipAlert, ShipAction, SHIP_PRESETS, ShipTemplate, ShipStation } from "../types/ship";
 import { pushLog, updatePlayerNested } from "./database";
+import { shipPath, playersPath } from "./paths";
 
-const shipPath = (roomId: string) => `rooms/${roomId}/ship`;
+
 
 // --- SHIP CRUD ---
 
@@ -274,7 +275,7 @@ export const propagateHullStress = async (roomId: string, damage: number) => {
     if (damage <= 0) return;
 
     // Fetch all players
-    const playersRef = ref(database, `rooms/${roomId}/players`);
+    const playersRef = ref(database, playersPath(roomId));
     const snapshot = await get(playersRef);
     const players = snapshot.val() as Record<string, { id: string; name: string; vitals: { stress: { current: number; min: number } } }> | null;
     if (!players) return;

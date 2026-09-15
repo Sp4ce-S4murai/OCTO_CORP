@@ -9,6 +9,7 @@ import { checkLineOfSight } from "@/lib/tacticalUtils";
 import { TacticalGrid } from "@/components/TacticalGrid";
 import { MiniSheet } from "@/components/MiniSheet";
 import { DiceCalculator } from "@/components/DiceCalculator";
+import { encounterPath } from "@/lib/paths";
 
 // Roll a dice expression like "2d6+3"
 function rollDice(expr: string): { total: number; detail: string } {
@@ -162,7 +163,7 @@ export default function PlayerTacticalClient({ roomId, playerId }: { roomId: str
         // Broadcast popup
         import("@/lib/firebase").then(({ database }) => {
             import("firebase/database").then(({ ref, update }) => {
-                update(ref(database, `rooms/${roomId}/encounter`), {
+                update(ref(database, encounterPath(roomId)), {
                     lastAttackEvent: {
                         id: Date.now(),
                         attacker: character.name.toUpperCase(),

@@ -16,6 +16,7 @@ import { ShipWardenPanel } from "./ShipWardenPanel";
 import { MiniSheet } from "./MiniSheet";
 import { GlobalInventoryEditor } from "./GlobalInventoryEditor";
 import { NPC_CLASSES, NPC_RANKS } from "@/lib/npcPresets";
+import { globalInventoryPath } from "@/lib/paths";
 
 
 const getTimestamp = () => Date.now();
@@ -553,7 +554,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                 const { GLOBAL_ITEMS } = await import('@/lib/itemsDictionary');
                                 const { database } = await import('@/lib/firebase');
                                 const { ref, set } = await import('firebase/database');
-                                const invRef = ref(database, `rooms/${roomId}/globalInventory`);
+                                const invRef = ref(database, globalInventoryPath(roomId));
                                 await set(invRef, GLOBAL_ITEMS);
                                 alert("Almoxarifado resetado com sucesso!");
                             }

@@ -4,13 +4,14 @@ import { useEffect, useState, useRef } from "react";
 import { database } from "@/lib/firebase";
 import { ref, onValue, query, orderByChild, limitToLast } from "firebase/database";
 import { RollLog } from "@/types/character";
+import { logsPath } from "@/lib/paths";
 
 export function TerminalLog({ roomId, heightClass = "h-64" }: { roomId: string, heightClass?: string }) {
     const [logs, setLogs] = useState<RollLog[]>([]);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const logsRef = query(ref(database, `rooms/${roomId}/logs`), orderByChild('timestamp'), limitToLast(50));
+        const logsRef = query(ref(database, logsPath(roomId)), orderByChild('timestamp'), limitToLast(50));
 
         const unsubscribe = onValue(logsRef, (snapshot) => {
             const data = snapshot.val();

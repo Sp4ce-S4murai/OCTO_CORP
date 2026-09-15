@@ -24,6 +24,7 @@ const NPC_COLORS = [
 ];
 
 import { NPC_CLASSES, NPC_RANKS } from "@/lib/npcPresets";
+import { encounterPath } from "@/lib/paths";
 
 const NPC_ICONS = ["👾", "💀", "🤖", "🕷️", "👤", "🐙", "🦂", "🧟", "👹", "🐍"];
 
@@ -305,7 +306,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             });
             import("@/lib/firebase").then(({ database }) => {
                 import("firebase/database").then(({ ref, update }) => {
-                    update(ref(database, `rooms/${roomId}/encounter`), {
+                    update(ref(database, encounterPath(roomId)), {
                         lastAttackEvent: {
                             id: Date.now(),
                             attacker: (npc?.name || 'NPC').toUpperCase(),
@@ -376,7 +377,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         // Broadcast popup
         import("@/lib/firebase").then(({ database }) => {
             import("firebase/database").then(({ ref, update }) => {
-                update(ref(database, `rooms/${roomId}/encounter`), {
+                update(ref(database, encounterPath(roomId)), {
                     lastAttackEvent: {
                         id: Date.now(),
                         attacker: (npc?.name || 'NPC').toUpperCase(),

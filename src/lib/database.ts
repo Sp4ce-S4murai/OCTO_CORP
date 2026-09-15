@@ -3,13 +3,10 @@ import { database } from "./firebase";
 import { CharacterSheet, RollLog, RoomData, EnvironmentState, EncounterState, Item, Weapon, NpcData, NpcAttack } from "../types/character";
 import { BALANCED_WEAPONS } from "./itemPresets";
 import { CombatState, Token } from "../types/combat";
+import { roomPath, playerPath, logsPath, userProfilePath } from "./paths";
 
 
-// Helper to get relative path for a room
-const roomPath = (roomId: string) => `rooms/${roomId}`;
-const playerPath = (roomId: string, playerId: string) => `rooms/${roomId}/players/${playerId}`;
-const logsPath = (roomId: string) => `rooms/${roomId}/logs`;
-const userProfilePath = (userId: string) => `users/${userId}/characters`;
+// Caminhos vem de lib/paths.ts — ver o namespace v2_ documentado la.
 
 // Generic subscription hook logic to be used inside React
 export const subscribeToRoom = (
@@ -446,7 +443,7 @@ export const applyDamageToPlayer = async (roomId: string, playerId: string, dama
 
 // --- TACTICAL COMBAT SYSTEM ---
 
-const combatPath = (roomId: string) => `rooms/${roomId}/combat`;
+const combatPath = (roomId: string) => `${roomPath(roomId)}/combat`;
 
 export const subscribeToCombat = (
     roomId: string,
