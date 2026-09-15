@@ -12,7 +12,7 @@ export default async function DirectorTacticalPage({ params }: PageProps) {
     const resolvedParams = await params;
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-emerald-500 font-mono flex flex-col">
+        <div className="h-dvh overflow-hidden bg-zinc-950 text-emerald-500 font-mono flex flex-col">
             <header className="bg-zinc-950/80 border-b border-emerald-900/50 p-4 flex items-center justify-between z-10 shrink-0 relative">
                 <Link href={`/sala/${resolvedParams.room_id}/diretor`} className="flex items-center gap-2 text-emerald-600 hover:text-emerald-400 font-bold uppercase tracking-widest transition-colors">
                     <ArrowLeft size={18} /> Voltar ao Painel
@@ -22,7 +22,7 @@ export default async function DirectorTacticalPage({ params }: PageProps) {
                 </div>
                 <div className="w-[150px]"></div>
             </header>
-            <main className="flex-1 relative bg-black">
+            <main className="flex-1 min-h-0 relative bg-black">
                 <TacticalGrid roomId={resolvedParams.room_id} isWarden={true} />
             </main>
         </div>

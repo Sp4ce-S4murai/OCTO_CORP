@@ -432,7 +432,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
             {/* WARDEN SIDEBAR */}
             {isWarden && (
-                <aside className="w-72 shrink-0 bg-zinc-950 border-r border-red-900/50 flex flex-col overflow-hidden">
+                <aside className="w-72 shrink-0 min-h-0 bg-zinc-950 border-r border-red-900/50 flex flex-col overflow-hidden">
                     <div className="p-3 border-b border-red-900/50 bg-red-950/20">
                         <h2 className="text-sm font-bold uppercase tracking-widest text-red-400 flex items-center gap-2">
                             <Skull size={14} /> CONTROLE DE AMEAÇAS
@@ -772,7 +772,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             )}
 
             {/* GRID AREA */}
-            <div className="flex-1 overflow-auto flex flex-col relative">
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
 
                 {/* --- EDITOR HUD --- */}
                 {isWarden && (
@@ -895,7 +895,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     A logica de jogo segue cartesiana 2D: os tokens continuam com
                     x/y inteiros, distancia Chebyshev e linha de visao Bresenham.
                     So a camada de desenho mudou. */}
-                <div className="flex-1 relative scanline-overlay bg-black min-h-[320px]">
+                <div className="flex-1 min-h-0 relative scanline-overlay bg-black">
                     <IsometricGrid
                         gridSize={gridSize}
                         tokens={tokens}
