@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, startEncounter, beginTurns, nextTurn, endEncounter, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
+import { updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, nextTurn, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
+import { startCombat, beginTurnsFromInitiative, endCombat, getOrderedPlayerIds } from "@/lib/combatActions";
 import { RoomData, CharacterSheet, CharacterClass, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS, getStarterKit, CLASS_LABELS } from "@/lib/itemsDictionary";
 import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
@@ -68,13 +69,9 @@ export default function WardenClient({ roomId }: { roomId: string }) {
     const [selectedPlayerToGive, setSelectedPlayerToGive] = useState<string>("");
     const [selectedItemToGive, setSelectedItemToGive] = useState<string>("");
 
-    const getCurrentOrder = () => {
-        if (!roomData?.players) return [];
-        const allPlayerIds = Object.keys(roomData.players);
-        const savedOrder = roomData.playerOrder || [];
-        const validOrderIds = new Set(savedOrder.filter((id: string) => allPlayerIds.includes(id)));
-        return [...savedOrder.filter((id: string) => validOrderIds.has(id)), ...allPlayerIds.filter((id: string) => !validOrderIds.has(id))];
-    };
+    // A logica de ordenacao vive em lib/combatActions.ts (getOrderedPlayerIds),
+    // reaproveitada por beginTurnsFromInitiative — era a mesma coisa duplicada.
+    const getCurrentOrder = () => getOrderedPlayerIds(roomData?.players, roomData?.playerOrder);
 
     const movePlayer = (playerId: string, direction: 'UP' | 'DOWN') => {
         if (!roomData?.players) return;
@@ -94,45 +91,14 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         useRoomStore.setState({ playerOrder: newOrder });
     };
 
-    const handleStartCombat = () => {
-        startEncounter(roomId);
-        pushLog(roomId, {
-            timestamp: getTimestamp(),
-            playerName: "SISTEMA",
-            playerId: "SYSTEM",
-            statName: 'INICIATIVA REQUISITADA',
-            statValue: 0,
-            roll: 0,
-            result: 'Warden Message'
-        });
-    };
+    // Handlers do gerenciador de combate: extraidos para lib/combatActions.ts,
+    // que o TacticalGrid tambem usa — o Diretor consegue abrir/fechar combate
+    // e comecar turnos sem sair do mapa tatico.
+    const handleStartCombat = () => { startCombat(roomId); };
 
     const handleBeginTurns = () => {
         if (!roomData?.encounter || !roomData.players) return;
-
-        // Sort players by initiative descending
-        const initiatives = roomData.encounter.initiatives || {};
-        const entries = Object.entries(initiatives).sort((a, b) => b[1] - a[1]);
-        const sortedIds = entries.map(e => e[0]);
-
-        // Add any missing players at the end
-        const allIds = getCurrentOrder();
-        for (const id of allIds) {
-            if (!sortedIds.includes(id)) {
-                sortedIds.push(id);
-            }
-        }
-
-        beginTurns(roomId, sortedIds);
-        pushLog(roomId, {
-            timestamp: getTimestamp(),
-            playerName: "SISTEMA",
-            playerId: "SYSTEM",
-            statName: 'COMBATE INICIADO',
-            statValue: 0,
-            roll: 0,
-            result: 'Warden Message'
-        });
+        beginTurnsFromInitiative(roomId, roomData.encounter, roomData.players, roomData.playerOrder);
     };
 
     const handleNextTurn = () => {
@@ -140,18 +106,7 @@ export default function WardenClient({ roomId }: { roomId: string }) {
         nextTurn(roomId, roomData.encounter);
     };
 
-    const handleEndCombat = () => {
-        endEncounter(roomId);
-        pushLog(roomId, {
-            timestamp: getTimestamp(),
-            playerName: "SISTEMA",
-            playerId: "SYSTEM",
-            statName: 'COMBATE ENCERRADO',
-            statValue: 0,
-            roll: 0,
-            result: 'Warden Message'
-        });
-    };
+    const handleEndCombat = () => { endCombat(roomId); };
 
     const ENVIRONMENT_PRESETS = {
         'Clima Estabilizado': { presetName: 'Clima Estabilizado', temperature: '21', pressure: '1.0', oxygen: '100', luminosity: 'Estável', gravity: '1.0', radiation: '0.1' },

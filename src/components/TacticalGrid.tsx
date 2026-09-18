@@ -13,7 +13,8 @@ const IsometricGrid = dynamic(() => import("./IsometricGrid"), {
     loading: () => <div className="w-full h-full flex items-center justify-center text-emerald-700 animate-pulse font-mono text-sm">Projetando malha...</div>,
 });
 import { checkLineOfSight, computeReachableCells, isCellBlocked } from "@/lib/tacticalUtils";
-import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square } from "lucide-react";
+import { startCombat, beginTurnsFromInitiative, endCombat } from "@/lib/combatActions";
+import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square, Play } from "lucide-react";
 
 interface TacticalGridProps {
     roomId: string;
@@ -53,6 +54,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
     useRoomSync(roomId);
     const encounter = useRoomStore(s => s.encounter);
     const players = useRoomStore(s => s.players);
+    const playerOrder = useRoomStore(s => s.playerOrder);
     const connected = useRoomStore(s => s.connected);
     const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
     const [npcForm, setNpcForm] = useState({ ...EMPTY_NPC_FORM });
@@ -154,6 +156,19 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         if (!encounter) return;
         nextTurn(roomId, encounter);
     };
+
+    // Gerenciador de combate, disponivel direto no mapa tatico: antes so
+    // existia no painel do Diretor (WardenClient), obrigando a alternar de
+    // aba no meio de uma cena para abrir combate, fechar a rolagem de
+    // iniciativa ou encerrar. A logica em si vive em lib/combatActions.ts,
+    // compartilhada com o painel — nao ha dois lugares calculando a mesma
+    // coisa de jeitos diferentes.
+    const handleStartCombat = () => { startCombat(roomId); };
+    const handleBeginTurns = () => {
+        if (!encounter) return;
+        beginTurnsFromInitiative(roomId, encounter, players, playerOrder ?? undefined);
+    };
+    const handleEndCombat = () => { endCombat(roomId); };
 
     const handleCellClick = (x: number, y: number) => {
         if (!isWarden) {
@@ -813,6 +828,52 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 <input type="file" accept=".json" onChange={handleImportGrid} className="hidden" />
                             </label>
                         </div>
+                    </div>
+                )}
+
+                {/* ── GERENCIADOR DE COMBATE (Diretor) ──
+                    Antes so existia no painel principal (WardenClient); o
+                    Diretor tinha que sair do mapa tatico para abrir combate,
+                    fechar a rolagem de iniciativa ou encerrar. */}
+                {isWarden && (
+                    <div className="shrink-0 bg-zinc-950/95 border-b border-blue-900/40 flex items-center gap-3 px-3 py-1.5 z-20">
+                        <Swords size={12} className="text-blue-500 shrink-0" />
+
+                        {!encounter?.isActive && (
+                            <button
+                                onClick={handleStartCombat}
+                                className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border bg-blue-950/50 hover:bg-blue-900 text-blue-400 border-blue-800 transition-colors"
+                            >
+                                <Swords size={12} /> INICIAR COMBATE
+                            </button>
+                        )}
+
+                        {encounter?.isActive && encounter.status === 'rolling' && (() => {
+                            const total = Object.keys(players).length;
+                            const rolled = Object.keys(players).filter(id => encounter.initiatives?.[id] !== undefined).length;
+                            return (
+                                <>
+                                    <span className="text-[10px] text-blue-600 uppercase font-bold tracking-widest">
+                                        Aguardando iniciativa: {rolled}/{total}
+                                    </span>
+                                    <button
+                                        onClick={handleBeginTurns}
+                                        className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border-emerald-800 transition-colors ml-auto"
+                                    >
+                                        <Play size={12} /> COMEÇAR TURNOS
+                                    </button>
+                                </>
+                            );
+                        })()}
+
+                        {encounter?.isActive && encounter.status === 'active' && (
+                            <button
+                                onClick={handleEndCombat}
+                                className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border bg-red-950/50 hover:bg-red-900 text-red-400 border-red-900 transition-colors ml-auto"
+                            >
+                                <Square size={12} /> ENCERRAR COMBATE
+                            </button>
+                        )}
                     </div>
                 )}
 
