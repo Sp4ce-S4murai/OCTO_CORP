@@ -53,7 +53,13 @@ export default function IsometricGrid(props: IsometricGridProps) {
     const [size, setSize] = useState({ width: 0, height: 0 });
     const [scale, setScale] = useState(1);
     const [pos, setPos] = useState({ x: 0, y: 0 });
-    const didFit = useRef(false);
+    // Falso ate o jogador arrastar ou dar zoom manualmente. Enquanto for falso,
+    // o enquadramento acompanha o container — essencial porque redimensionar a
+    // JANELA (nao so o dispositivo) chega exatamente pelo mesmo ResizeObserver
+    // que o primeiro carregamento, e sem reagir a isso o mapa fica com a escala
+    // congelada do tamanho antigo: reduzir a janela so encolhe o canvas ao
+    // redor de um tabuleiro que nao encolheu junto, cortando as bordas dele.
+    const userAdjusted = useRef(false);
 
     const offset = useMemo(() => boardOffset(gridSize), [gridSize]);
     const board = useMemo(() => boardPixelSize(gridSize), [gridSize]);
@@ -82,12 +88,19 @@ export default function IsometricGrid(props: IsometricGridProps) {
         });
     };
 
-    // Enquadra o tabuleiro inteiro uma unica vez. Reenquadrar a cada render
-    // tiraria o mapa do lugar no meio do turno de alguem.
+    // Reenquadra sempre que o container muda de tamanho — inclusive quando o
+    // container encolhe porque a JANELA foi redimensionada, nao so na medida
+    // inicial. Bug que isto corrige: antes o fit rodava uma unica vez (uma
+    // ref "didFit"); reduzir a janela depois disso encolhia o canvas mas
+    // deixava escala e posicao congeladas na medida antiga, entao o tabuleiro
+    // ficava maior que o canvas ao redor dele — cortado nas bordas.
+    //
+    // So para de seguir o container depois que o jogador mexeu a mao nisso
+    // (arrastar ou dar zoom): dai o enquadramento e dele, e o "Centrar" que o
+    // devolve ao automatico.
     useEffect(() => {
-        if (didFit.current || !size.width || !size.height) return;
+        if (userAdjusted.current || !size.width || !size.height) return;
         fitToScreen();
-        didFit.current = true;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [size, board]);
 
@@ -130,6 +143,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
     const zoomAround = (pointer: { x: number; y: number }, factor: number) => {
         const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
         if (next === scale) return;
+        userAdjusted.current = true;
         // Mantem sob o dedo o mesmo ponto do mapa durante o zoom.
         setPos({
             x: pointer.x - (pointer.x - pos.x) * (next / scale),
@@ -430,7 +444,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
                 x={pos.x}
                 y={pos.y}
                 draggable
-                onDragStart={() => { didDrag.current = true; }}
+                onDragStart={() => { didDrag.current = true; userAdjusted.current = true; }}
                 onDragEnd={(e) => setPos({ x: e.target.x(), y: e.target.y() })}
                 onClick={handleStageClick}
                 onTap={handleStageClick}
@@ -456,8 +470,9 @@ export default function IsometricGrid(props: IsometricGridProps) {
                     className="bg-zinc-950/90 border border-emerald-900 text-emerald-400 w-8 h-8 text-lg leading-none"
                 >−</button>
                 <button
-                    onClick={fitToScreen}
+                    onClick={() => { userAdjusted.current = false; fitToScreen(); }}
                     className="bg-zinc-950/90 border border-emerald-900 text-emerald-400 px-2 h-8 text-[10px] uppercase tracking-widest"
+                    title="Reenquadra e volta a acompanhar o tamanho da janela"
                 >Centrar</button>
             </div>
         </div>

@@ -814,15 +814,21 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
             {/* GRID AREA */}
             <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
 
-                {/* --- EDITOR HUD --- */}
+                {/* --- EDITOR HUD ---
+                    flex-wrap: numa janela estreita (sidebar de 288px ja come
+                    boa parte da largura), esta barra tem MODO EDITOR + 4
+                    ferramentas + cor + tamanho + EXPORTAR/IMPORTAR — sem
+                    quebra de linha, o excesso simplesmente ficava cortado pelo
+                    overflow-hidden do container pai em vez de aparecer numa
+                    segunda linha. */}
                 {isWarden && (
-                    <div className="shrink-0 bg-zinc-950 border-b border-emerald-900/50 p-2 flex items-center justify-between z-30">
-                        <div className="flex items-center gap-4">
+                    <div className="shrink-0 bg-zinc-950 border-b border-emerald-900/50 p-2 flex items-center flex-wrap gap-y-2 justify-between z-30">
+                        <div className="flex items-center flex-wrap gap-4">
                             <button onClick={() => setIsEditorMode(!isEditorMode)} className={`flex items-center gap-1 px-3 py-1 text-xs font-bold border transition-colors ${isEditorMode ? 'bg-amber-600 text-white border-amber-500' : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white'}`}>
                                 <Edit3 size={14} /> MODO EDITOR
                             </button>
                             {isEditorMode && (
-                                <div className="flex items-center gap-2 border-l border-zinc-800 pl-4">
+                                <div className="flex items-center flex-wrap gap-2 border-l border-zinc-800 pl-4">
                                     <button onClick={() => setEditorTool('wall')} className={`p-1.5 border ${editorTool === 'wall' ? 'bg-emerald-900/50 border-emerald-500 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Parede"><Square size={14} className="fill-current" /></button>
                                     <button onClick={() => setEditorTool('cover')} className={`p-1.5 border ${editorTool === 'cover' ? 'bg-amber-900/50 border-amber-500 text-amber-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Cobertura (Meia Parede)"><Square size={14} className="fill-current opacity-50" /></button>
                                     <button onClick={() => setEditorTool('spawn')} className={`p-1.5 border ${editorTool === 'spawn' ? 'bg-emerald-900/50 border-emerald-500 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Ponto de Entrada (Spawn)"><MapPin size={14} /></button>
@@ -862,7 +868,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     Diretor tinha que sair do mapa tatico para abrir combate,
                     fechar a rolagem de iniciativa ou encerrar. */}
                 {isWarden && (
-                    <div className="shrink-0 bg-zinc-950/95 border-b border-blue-900/40 flex items-center gap-3 px-3 py-1.5 z-20">
+                    <div className="shrink-0 bg-zinc-950/95 border-b border-blue-900/40 flex items-center flex-wrap gap-3 px-3 py-1.5 z-20">
                         <Swords size={12} className="text-blue-500 shrink-0" />
 
                         {!encounter?.isActive && (
