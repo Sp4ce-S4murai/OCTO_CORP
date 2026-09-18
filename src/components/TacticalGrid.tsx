@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, pushLog, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
+import { updateTokenPosition, removeTokenFromGrid, deductTokenMovement, updatePlayerNested, addNPCToEncounter, updateNpcHp, updateNpcData, pushLog, nextTurn, applyDamageToPlayer, addGridObstacle, removeGridObstacle, updateEncounterState } from "@/lib/database";
 import { Weapon, NpcAttack } from "@/types/character";
 import { useRoomStore, useRoomSync } from "@/lib/roomStore";
 
@@ -14,7 +14,7 @@ const IsometricGrid = dynamic(() => import("./IsometricGrid"), {
 });
 import { checkLineOfSight, computeReachableCells, isCellBlocked } from "@/lib/tacticalUtils";
 import { startCombat, beginTurnsFromInitiative, endCombat } from "@/lib/combatActions";
-import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square, Play } from "lucide-react";
+import { Trash2, Plus, Skull, Swords, ChevronDown, ChevronUp, X, SkipForward, Edit3, Download, UploadCloud, Square, Play, Eye, EyeOff, MapPin } from "lucide-react";
 
 interface TacticalGridProps {
     roomId: string;
@@ -69,7 +69,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
 
     // Editor Mode State
     const [isEditorMode, setIsEditorMode] = useState(false);
-    const [editorTool, setEditorTool] = useState<'wall' | 'cover' | 'door' | 'hazard' | 'eraser'>('wall');
+    const [editorTool, setEditorTool] = useState<'wall' | 'cover' | 'door' | 'hazard' | 'spawn' | 'eraser'>('wall');
     const [editorColor, setEditorColor] = useState('bg-zinc-700');
     
     // Grid settings
@@ -152,6 +152,17 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
         );
     }, [activeToken, activeTokenId, encounter, isWarden, isMyTurn]);
 
+    // Celulas marcadas como ponto de entrada. Quando existe pelo menos uma, a
+    // primeira entrada de um jogador no mapa so vale nelas — sem nenhuma
+    // marcada, qualquer celula livre segue funcionando como antes.
+    const spawnCells = useMemo(() => {
+        const set = new Set<string>();
+        Object.values(encounter?.obstacles || {}).forEach(o => {
+            if (o.type === 'spawn') set.add(`${Number(o.x)},${Number(o.y)}`);
+        });
+        return set;
+    }, [encounter?.obstacles]);
+
     const handleEndTurn = () => {
         if (!encounter) return;
         nextTurn(roomId, encounter);
@@ -183,7 +194,9 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                 updateTokenPosition(roomId, playerId!, x, y, myToken.color);
                 deductTokenMovement(roomId, playerId!, cost);
             } else {
-                // Primeira entrada no grid: nao pode ser dentro de uma parede.
+                // Primeira entrada no grid: nao pode ser dentro de uma parede,
+                // e se o Diretor marcou pontos de entrada, so vale entrar neles.
+                if (spawnCells.size > 0 && !spawnCells.has(`${x},${y}`)) return;
                 if (isCellBlocked(x, y, encounter, playerId)) return;
                 const maxMp = players?.[playerId!]?.movementPoints?.max || 6;
                 updateTokenPosition(roomId, playerId!, x, y, 'bg-emerald-500', maxMp);
@@ -203,7 +216,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                     y: Number(y),
                     type: editorTool,
                     color: editorColor,
-                    isBlocking: editorTool !== 'hazard',
+                    isBlocking: editorTool !== 'hazard' && editorTool !== 'spawn',
                     isOpaque: editorTool === 'wall' || editorTool === 'door'
                 });
             }
@@ -476,9 +489,21 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                         >
                                             <span className="text-base">{npc.isDead ? '💀' : (npc.icon || '👾')}</span>
                                             {npc.name}
+                                            {npc.hidden && !npc.isDead && (
+                                                <span className="text-[9px] text-amber-500 normal-case font-normal">(oculta)</span>
+                                            )}
                                         </button>
                                         {token && (
                                             <span className="text-[10px] text-zinc-500 font-mono">[{token.x},{token.y}]</span>
+                                        )}
+                                        {!npc.isDead && (
+                                            <button
+                                                onClick={() => updateNpcData(roomId, npc.id, { hidden: !npc.hidden })}
+                                                className={`transition-colors ${npc.hidden ? 'text-amber-500 hover:text-amber-300' : 'text-red-700/60 hover:text-red-400'}`}
+                                                title={npc.hidden ? "Oculta dos jogadores — clique para revelar" : "Visivel aos jogadores — clique para ocultar (emboscada)"}
+                                            >
+                                                {npc.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                                            </button>
                                         )}
                                         <button
                                             onClick={() => setExpandedNpc(prev => prev === npc.id ? null : npc.id)}
@@ -800,6 +825,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 <div className="flex items-center gap-2 border-l border-zinc-800 pl-4">
                                     <button onClick={() => setEditorTool('wall')} className={`p-1.5 border ${editorTool === 'wall' ? 'bg-emerald-900/50 border-emerald-500 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Parede"><Square size={14} className="fill-current" /></button>
                                     <button onClick={() => setEditorTool('cover')} className={`p-1.5 border ${editorTool === 'cover' ? 'bg-amber-900/50 border-amber-500 text-amber-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Cobertura (Meia Parede)"><Square size={14} className="fill-current opacity-50" /></button>
+                                    <button onClick={() => setEditorTool('spawn')} className={`p-1.5 border ${editorTool === 'spawn' ? 'bg-emerald-900/50 border-emerald-500 text-emerald-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Ponto de Entrada (Spawn)"><MapPin size={14} /></button>
                                     <button onClick={() => setEditorTool('eraser')} className={`p-1.5 border ${editorTool === 'eraser' ? 'bg-red-900/50 border-red-500 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`} title="Apagar (Borracha)"><Trash2 size={14} /></button>
                                     <select value={editorColor} onChange={e => setEditorColor(e.target.value)} className="bg-zinc-900 border border-zinc-800 text-zinc-300 p-1 outline-none text-xs ml-2">
                                         <option value="bg-zinc-700">Cinza</option>
@@ -887,8 +913,11 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                                 const isNpc = id.startsWith('npc_');
                                 const npcEntry = npcs[id];
                                 const playerEntry = players?.[id];
-                                const label = isNpc ? (npcEntry?.name || 'NPC') : (playerEntry?.name || id);
-                                const icon = isNpc ? (npcEntry?.isDead ? '💀' : (npcEntry?.icon || '👾')) : null;
+                                // Uma emboscada oculta na fila de turnos denunciaria a si mesma
+                                // antes de agir — o jogador ve so "???" ate ela ser revelada.
+                                const isHiddenFromMe = isNpc && npcEntry?.hidden && !isWarden;
+                                const label = isHiddenFromMe ? '???' : isNpc ? (npcEntry?.name || 'NPC') : (playerEntry?.name || id);
+                                const icon = isHiddenFromMe ? '❓' : isNpc ? (npcEntry?.isDead ? '💀' : (npcEntry?.icon || '👾')) : null;
                                 const isMeTurn = !isWarden && id === playerId;
 
                                 return (
@@ -966,6 +995,7 @@ export function TacticalGrid({ roomId, playerId, isWarden }: TacticalGridProps) 
                         currentTurnId={currentTurnId}
                         selectedTokenId={isWarden ? selectedTokenId : null}
                         targetedTokenId={!isWarden && playerId ? (players?.[playerId]?.selectedTargetId ?? null) : null}
+                        isWarden={!!isWarden}
                         activeToken={activeToken}
                         reachable={reachable}
                         activeTokenMaxRange={activeTokenId ? getTokenMaxRange(activeTokenId) : 0}

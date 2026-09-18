@@ -143,7 +143,7 @@ export function shade(hex: string, factor: number): string {
  * escondia por completo qualquer token atras dela.
  */
 export function obstacleHeight(type: string, tileH = TILE_H): number {
-    if (type === 'hazard') return 0;         // perigo de chao, sem volume
-    if (type === 'cover') return tileH / 2;  // meio bloco
-    return tileH;                            // parede e porta: cubo inteiro
+    if (type === 'hazard' || type === 'spawn') return 0; // marcador de chao, sem volume
+    if (type === 'cover') return tileH / 2;              // meio bloco
+    return tileH;                                        // parede e porta: cubo inteiro
 }

@@ -127,6 +127,11 @@ export interface NpcData {
     isDead?: boolean;      // True when HP reached 0 — token becomes a corpse
     combat?: number;       // Base combat stat (chance to hit)
     attacks?: NpcAttack[];
+    /**
+     * Ameaca oculta dos jogadores (emboscada) — some do grid e vira "???" na
+     * fila de turnos para quem nao e o Diretor, que continua vendo tudo.
+     */
+    hidden?: boolean;
 }
 
 export interface GridToken {
@@ -141,7 +146,8 @@ export interface GridObstacle {
     id: string;
     x: number;
     y: number;
-    type: 'wall' | 'cover' | 'hazard' | 'door';
+    /** 'spawn' e marcador de entrada de jogador no mapa: sem volume, nao bloqueia. */
+    type: 'wall' | 'cover' | 'hazard' | 'door' | 'spawn';
     color: string;
     icon?: string;
     isBlocking: boolean; // Does it block movement?

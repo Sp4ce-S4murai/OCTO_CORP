@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 
-import { updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, nextTurn, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, killNpc, applyDamageToPlayer } from "@/lib/database";
+import { updatePlayerNested, updatePlayer, pushLog, updateEnvironment, updatePlayerOrder, nextTurn, clearActivePanicTest, setRoomLockdown, setRoomImage, clearRoomImage, addNPCToEncounter, removeNPCFromEncounter, giveItemToPlayer, removeItemFromPlayer, initializeGlobalInventory, updateNpcHp, updateNpcData, killNpc, applyDamageToPlayer } from "@/lib/database";
 import { startCombat, beginTurnsFromInitiative, endCombat, getOrderedPlayerIds } from "@/lib/combatActions";
 import { RoomData, CharacterSheet, CharacterClass, Consequence, Item, Weapon, NpcData, NpcAttack } from "@/types/character";
 import { STARTER_KITS, getStarterKit, CLASS_LABELS } from "@/lib/itemsDictionary";
-import { User, Activity, Lock, Unlock, Eye, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
+import { User, Activity, Lock, Unlock, Eye, EyeOff, X, ChevronUp, ChevronDown, Swords, Play, SkipForward, Square, Image as ImageIcon, Trash2, Upload, Package, Skull, Plus, Zap, ChevronRight } from "lucide-react";
 import { generatePanicResult } from "@/lib/panicOracle";
 import { TerminalLog } from "./TerminalLog";
 import { HeartRateMonitor } from "./HeartRateMonitor";
@@ -696,8 +696,20 @@ export default function WardenClient({ roomId }: { roomId: string }) {
                                             {/* Header row */}
                                             <div className="flex items-center gap-2 p-2">
                                                 <span className="text-lg shrink-0">{npc.isDead ? '💀' : (npc.icon || '👾')}</span>
-                                                <span className={`flex-1 text-xs font-bold uppercase tracking-wide ${npc.isDead ? 'text-zinc-500 line-through' : 'text-red-400'}`}>{npc.name}</span>
+                                                <span className={`flex-1 text-xs font-bold uppercase tracking-wide ${npc.isDead ? 'text-zinc-500 line-through' : 'text-red-400'}`}>
+                                                    {npc.name}
+                                                    {npc.hidden && !npc.isDead && <span className="text-[9px] text-amber-500 normal-case font-normal ml-1">(oculta)</span>}
+                                                </span>
                                                 <span className="text-[10px] font-mono text-zinc-500">{npc.hp}/{npc.maxHp} HP</span>
+                                                {!npc.isDead && (
+                                                    <button
+                                                        onClick={() => updateNpcData(roomId, npc.id, { hidden: !npc.hidden })}
+                                                        className={`transition-colors px-1 ${npc.hidden ? 'text-amber-500 hover:text-amber-300' : 'text-red-700/60 hover:text-red-400'}`}
+                                                        title={npc.hidden ? "Oculta dos jogadores — clique para revelar" : "Visivel aos jogadores — clique para ocultar (emboscada)"}
+                                                    >
+                                                        {npc.hidden ? <EyeOff size={12}/> : <Eye size={12}/>}
+                                                    </button>
+                                                )}
                                                 {!npc.isDead && (
                                                     <button
                                                         onClick={() => setExpandedNpcId(prev => prev === npc.id ? null : npc.id)}

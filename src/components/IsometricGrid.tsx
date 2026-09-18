@@ -19,6 +19,8 @@ export interface IsometricGridProps {
     currentTurnId: string | null;
     selectedTokenId: string | null;
     targetedTokenId: string | null;
+    /** Diretor ve ameacas ocultas (esmaecidas); jogador nao ve nada nesta celula. */
+    isWarden: boolean;
     /** Token cujo alcance de ataque deve ser destacado. */
     activeToken: GridToken | null;
     /**
@@ -42,7 +44,7 @@ const MAX_SCALE = 2.5;
 export default function IsometricGrid(props: IsometricGridProps) {
     const {
         gridSize, tokens, obstacles, players, npcs, currentTurnId,
-        selectedTokenId, targetedTokenId, activeToken, reachable,
+        selectedTokenId, targetedTokenId, isWarden, activeToken, reachable,
         activeTokenMaxRange, canHighlight, onCellClick, onTokenClick,
     } = props;
 
@@ -168,16 +170,23 @@ export default function IsometricGrid(props: IsometricGridProps) {
         // So o chao. Obstaculos com volume sao desenhados junto dos tokens,
         // para poderem ser ordenados por profundidade entre si.
         const hazards = new Map<string, GridObstacle>();
+        const spawns = new Set<string>();
         Object.values(obstacles || {}).forEach(o => {
-            if (obstacleHeight(o.type) <= 0) hazards.set(`${Number(o.x)},${Number(o.y)}`, o);
+            if (obstacleHeight(o.type) > 0) return;
+            const key = `${Number(o.x)},${Number(o.y)}`;
+            if (o.type === 'spawn') spawns.add(key);
+            else hazards.set(key, o);
         });
 
         const pts = diamondPoints();
+        const spawnRing = diamondPoints(TILE_W * 0.55, TILE_H * 0.55);
         const out: React.ReactElement[] = [];
 
         for (let y = 0; y < gridSize; y++) {
             for (let x = 0; x < gridSize; x++) {
+                const key = `${x},${y}`;
                 const s = gridToScreen(x, y);
+                const isSpawn = spawns.has(key);
 
                 let fill = "#0a0f0d";
                 let stroke = "rgba(16,185,129,0.14)";
@@ -186,7 +195,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
                     // Verde: da para chegar de fato, ja descontando o contorno
                     // de paredes. Vermelho: dentro do alcance de ataque, que e
                     // Chebyshev puro — a linha de visao e checada no disparo.
-                    if (reachable.has(`${x},${y}`)) {
+                    if (reachable.has(key)) {
                         fill = "rgba(16,185,129,0.18)";
                         stroke = "rgba(16,185,129,0.45)";
                     } else if (activeToken) {
@@ -199,10 +208,17 @@ export default function IsometricGrid(props: IsometricGridProps) {
                 }
 
                 // Perigo e marcacao de chao, nao bloco: fica rente ao piso.
-                const hazard = hazards.get(`${x},${y}`);
+                const hazard = hazards.get(key);
                 if (hazard) {
                     fill = tailwindToHex(hazard.color);
                     stroke = "#000";
+                }
+
+                // Ponto de entrada: cor fixa, ignora a cor escolhida no editor —
+                // sua identidade importa mais que combinar com a paleta do mapa.
+                if (isSpawn) {
+                    fill = "rgba(16,185,129,0.12)";
+                    stroke = "#10b981";
                 }
 
                 out.push(
@@ -220,6 +236,23 @@ export default function IsometricGrid(props: IsometricGridProps) {
                         perfectDrawEnabled={false}
                     />
                 );
+
+                if (isSpawn) {
+                    out.push(
+                        <Line
+                            key={`sp${x}_${y}`}
+                            points={spawnRing}
+                            x={s.x}
+                            y={s.y}
+                            closed
+                            stroke="#34d399"
+                            strokeWidth={1.5}
+                            dash={[4, 3]}
+                            listening={false}
+                            perfectDrawEnabled={false}
+                        />
+                    );
+                }
             }
         }
         return out;
@@ -268,6 +301,11 @@ export default function IsometricGrid(props: IsometricGridProps) {
         });
 
         Object.entries(tokens || {}).forEach(([id, token]) => {
+            const npc = id.startsWith("npc_") ? npcs?.[id] : null;
+            // Ameaca oculta some do grid do jogador; o Diretor continua vendo,
+            // esmaecida, para lembrar que ela existe e esta escondida.
+            if (npc?.hidden && !isWarden) return;
+
             props.push({
                 key: id,
                 d: depth(token.x, token.y),
@@ -278,7 +316,7 @@ export default function IsometricGrid(props: IsometricGridProps) {
 
         props.sort((a, b) => a.d - b.d || a.tie - b.tie);
         return props.map(p => p.node);
-    }, [tokens, obstacles, npcs, players, currentTurnId, selectedTokenId, targetedTokenId, onTokenClick, onCellClick]);
+    }, [tokens, obstacles, npcs, players, currentTurnId, selectedTokenId, targetedTokenId, isWarden, onTokenClick, onCellClick]);
 
     function renderToken(id: string, token: GridToken) {
         {
@@ -286,6 +324,9 @@ export default function IsometricGrid(props: IsometricGridProps) {
                 const isNpc = id.startsWith("npc_");
                 const npc = isNpc ? npcs?.[id] : null;
                 const isCorpse = isNpc && (npc?.isDead || (npc?.hp ?? 1) <= 0);
+                // So chega aqui esmaecido quando e o Diretor olhando (o
+                // jogador nunca ve este token — filtrado antes, no scenery).
+                const isHiddenToWarden = isNpc && npc?.hidden && isWarden;
                 const isTurn = currentTurnId === id;
                 const isHighlighted = selectedTokenId === id || targetedTokenId === id;
                 const hpPct = npc && npc.maxHp > 0 ? Math.max(0, npc.hp / npc.maxHp) : 1;
@@ -319,9 +360,10 @@ export default function IsometricGrid(props: IsometricGridProps) {
                             points={diamondPoints(TILE_W * 0.7, TILE_H * 0.7)}
                             closed
                             fill={base}
-                            opacity={isCorpse ? 0.45 : 0.85}
+                            opacity={isCorpse ? 0.45 : isHiddenToWarden ? 0.35 : 0.85}
                             stroke={outline}
                             strokeWidth={outlineW}
+                            dash={isHiddenToWarden ? [3, 3] : undefined}
                             perfectDrawEnabled={false}
                         />
                         {/* Corpo: um pino vertical, na escala aproximada de uma pessoa no tile */}
@@ -329,9 +371,10 @@ export default function IsometricGrid(props: IsometricGridProps) {
                             y={-TILE_H * 0.75}
                             radius={TILE_W * 0.22}
                             fill={base}
-                            opacity={isCorpse ? 0.5 : 1}
+                            opacity={isCorpse ? 0.5 : isHiddenToWarden ? 0.4 : 1}
                             stroke={outline}
                             strokeWidth={outlineW}
+                            dash={isHiddenToWarden ? [3, 3] : undefined}
                             perfectDrawEnabled={false}
                         />
                         <Text
